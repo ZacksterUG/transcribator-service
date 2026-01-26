@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio-storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    networks:
+      - transcription-net
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: nats-server
+    ports:
+      - "4222:4222"  
+      - "8222:8222"  
+      - "6222:6222" 
+    volumes:
+      - nats_data:/data 
+    command: >
+      --name transcription-nats
+      --http_port 8222
+      --debug
+      --trace
+      --jetstream
+      --store_dir /data
+    networks:
+      - transcription-net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_:/data
+    command: redis-server --appendonly yes --save 60 1 --dir /data
+    networks:
+      - transcription-net
+
+  db:
+    image: postgres:15
+    container_name: transcription-db
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: transcription_db
+      POSTGRES_USER: ${POSTGRESQL_USER}
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD}
+    volumes:
+      - pg_:/var/lib/postgresql/data
+    networks:
+      - transcription-net
+
+  migrate:
+    image: liquibase/liquibase:4.27
+    depends_on:
+      - db
+    volumes:
+      - ./db:/liquibase/changelog
+    command: >
+      --url=jdbc:postgresql://db:5432/transcription_db
+      --username=postgres
+      --password=postgres
+      --changeLogFile=changelog-master.xml
+      --classpath=/liquibase/changelog
+      update
+    networks:
+      - transcription-net
+
+
+networks:
+  transcription-net:
+    driver: bridge
+
+volumes:
+  minio_: {}
+  redis_: {}
+  pg_: {}
+  nats_data: {} 

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Схемы -->
+    <changeSet id="ver-0-0-1-create-schemas" author="alexey">
+        <sqlFile path="schemas/01_create_schemas.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <!-- Таблицы -->
+    <changeSet id="ver-0-0-1-create-table-users" author="alexey">
+        <sqlFile path="tables/01_users.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-permissions" author="alexey">
+        <sqlFile path="tables/02_permissions.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-roles" author="alexey">
+        <sqlFile path="tables/03_roles.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-user-roles" author="alexey">
+        <sqlFile path="tables/04_user_roles.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-api-tokens" author="alexey">
+        <sqlFile path="tables/05_api_tokens.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-token-permissions" author="alexey">
+        <sqlFile path="tables/06_token_permissions.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-role-permissions" author="alexey">
+        <sqlFile path="tables/07_role_permissions.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-access-logs" author="alexey">
+        <sqlFile path="tables/08_access_logs.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <changeSet id="ver-0-0-1-create-table-transcription-jobs" author="alexey">
+        <sqlFile path="tables/09_transcription_jobs.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <!-- Индексы -->
+    <changeSet id="ver-0-0-1-create-indexes" author="alexey">
+        <sqlFile path="indexes/01_all_indexes.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+    <!-- Фуннкции -->
+    <changeSet id="set_updated_at" author="alexey">
+        <sqlFile path="functions/set_updated_at.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="false"/>
+    </changeSet>
+
+    <!-- Триггеры -->
+    <changeSet id="ver-0-0-1-create-triggers" author="alexey">
+        <sqlFile path="triggers/01_auth_trigger.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="true"
+                 splitStatements="true"/>
+    </changeSet>
+
+</databaseChangeLog>

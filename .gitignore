@@ -1,0 +1,67 @@
+ast-service
+
+# Байт-код Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Виртуальные окружения
+venv/
+ENV/
+.env
+.venv
+env/
+venv*/
+
+# Локальные конфигурации и секреты
+*.env
+.env.local
+.secrets
+config/local.py
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Логи и временные файлы
+logs/
+*.log
+*.tmp
+*.bak
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Тесты и покрытие
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Упаковка и дистрибуция
+dist/
+build/
+*.egg-info/
+*.whl
+*.tar.gz
+
+# Docker
+.dockerignore
+
+# Минио / медиа (если используется)
+media/
+uploads/
+files/
+
+# Специфичное для ML (опционально)
+models/
+checkpoints/
+runs/
+wandb/
+
+
+temp_dir
