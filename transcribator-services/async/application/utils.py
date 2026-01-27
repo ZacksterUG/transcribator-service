@@ -39,36 +39,155 @@ def convert_audio_to_16khz(audio_path: str):
     except Exception as e:
         raise Exception(f"Failed to convert audio to 16kHz: {str(e)}")
     
-def extract_archive(archive_path: str, extract_to: str):
-    """Распаковывает архив в указанную директорию с защитой от path traversal"""
+def extract_archive(    archive_path: str, 
+    extract_to: str,
+    max_total_size_bytes: int = 1_073_741_824,  # 1 ГБ по умолчанию
+    max_files: int = 1000,
+    max_compression_ratio: float = 100.0  # 1:100 — подозрительно
+    ):
+    """
+    Распаковывает архив с защитой от zip-bomb атак.
+    
+    Args:
+        archive_path: Путь к архиву
+        extract_to: Целевая директория
+        max_total_size_bytes: Максимальный общий размер распакованных файлов
+        max_files: Максимальное количество файлов в архиве
+        max_compression_ratio: Максимальное соотношение сжатия (распакованный_размер / архив_размер)
+    
+    Returns:
+        (успех: bool, ошибка: str | None)
+    """
     try:
         extract_to = os.path.abspath(extract_to)
         os.makedirs(extract_to, exist_ok=True)
-
+        
+        archive_size = os.path.getsize(archive_path)
+        
+        # 🔒 Слой 1: Быстрая проверка соотношения сжатия ДО распаковки
         if archive_path.endswith('.zip'):
             with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                # Проверяем количество файлов
+                if len(zip_ref.namelist()) > max_files:
+                    return False, f"Too many files in archive: {len(zip_ref.namelist())} > {max_files}"
+                
+                # Предварительная оценка общего размера
+                total_uncompressed = sum(info.file_size for info in zip_ref.infolist())
+                
+                # Проверка соотношения сжатия
+                if archive_size > 0:
+                    ratio = total_uncompressed / archive_size
+                    if ratio > max_compression_ratio:
+                        return False, (
+                            f"Suspicious compression ratio: {ratio:.1f}x "
+                            f"({total_uncompressed / 1024 / 1024:.1f} MB uncompressed vs "
+                            f"{archive_size / 1024 / 1024:.1f} MB archive)"
+                        )
+                
+                # Проверка общего размера
+                if total_uncompressed > max_total_size_bytes:
+                    return False, (
+                        f"Total uncompressed size exceeds limit: "
+                        f"{total_uncompressed / 1024 / 1024:.1f} MB > "
+                        f"{max_total_size_bytes / 1024 / 1024:.1f} MB"
+                    )
+                
+                # 🔒 Слой 2: Распаковка с контролем размера в реальном времени
+                accumulated_size = 0
                 for member in zip_ref.namelist():
                     member_path = os.path.join(extract_to, member)
-                    # 🔒 Проверка: путь должен начинаться с extract_to
+                    
+                    # Защита от path traversal
                     if not os.path.abspath(member_path).startswith(extract_to):
-                        return False, f"Path traversal detected in archive: {member}"
-                zip_ref.extractall(extract_to)
-
+                        return False, f"Path traversal detected: {member}"
+                    
+                    # Получаем информацию о файле
+                    info = zip_ref.getinfo(member)
+                    
+                    # Пропускаем директории
+                    if info.is_dir():
+                        os.makedirs(member_path, exist_ok=True)
+                        continue
+                    
+                    # Контроль накопленного размера
+                    accumulated_size += info.file_size
+                    if accumulated_size > max_total_size_bytes:
+                        return False, (
+                            f"Extraction aborted: total size would exceed "
+                            f"{max_total_size_bytes / 1024 / 1024:.1f} MB limit"
+                        )
+                    
+                    # Распаковываем файл по частям для контроля памяти
+                    with zip_ref.open(member) as source, open(member_path, 'wb') as target:
+                        while True:
+                            chunk = source.read(8192)
+                            if not chunk:
+                                break
+                            target.write(chunk)
+        
         elif archive_path.endswith(('.tar', '.tar.gz', '.tgz')):
             with tarfile.open(archive_path, 'r') as tar_ref:
-                for member in tar_ref.getmembers():
+                members = tar_ref.getmembers()
+                
+                # Проверка количества файлов
+                if len(members) > max_files:
+                    return False, f"Too many files in archive: {len(members)} > {max_files}"
+                
+                # Предварительная оценка размера
+                total_uncompressed = sum(m.size for m in members if m.isfile())
+                
+                # Проверка соотношения сжатия
+                if archive_size > 0:
+                    ratio = total_uncompressed / archive_size if archive_size > 0 else 0
+                    if ratio > max_compression_ratio:
+                        return False, (
+                            f"Suspicious compression ratio: {ratio:.1f}x "
+                            f"({total_uncompressed / 1024 / 1024:.1f} MB uncompressed vs "
+                            f"{archive_size / 1024 / 1024:.1f} MB archive)"
+                        )
+                
+                # Проверка общего размера
+                if total_uncompressed > max_total_size_bytes:
+                    return False, (
+                        f"Total uncompressed size exceeds limit: "
+                        f"{total_uncompressed / 1024 / 1024:.1f} MB > "
+                        f"{max_total_size_bytes / 1024 / 1024:.1f} MB"
+                    )
+                
+                # 🔒 Слой 2: Распаковка с контролем
+                accumulated_size = 0
+                for member in members:
                     member_path = os.path.join(extract_to, member.name)
+                    
+                    # Защита от path traversal
                     if not os.path.abspath(member_path).startswith(extract_to):
-                        return False, f"Path traversal detected in archive: {member.name}"
-                tar_ref.extractall(extract_to)
-
+                        return False, f"Path traversal detected: {member.name}"
+                    
+                    # Пропускаем символические ссылки (потенциальная уязвимость)
+                    if member.issym() or member.islnk():
+                        continue
+                    
+                    if member.isfile():
+                        accumulated_size += member.size
+                        if accumulated_size > max_total_size_bytes:
+                            return False, (
+                                f"Extraction aborted: total size would exceed "
+                                f"{max_total_size_bytes / 1024 / 1024:.1f} MB limit"
+                            )
+                        
+                        # Извлекаем с контролем памяти
+                        tar_ref.extract(member, extract_to)
+                        # Устанавливаем правильные права (без выполнения)
+                        if os.path.isfile(member_path):
+                            os.chmod(member_path, 0o644)
+        
         else:
             return False, f"Unsupported archive format: {archive_path}"
-
+        
         return True, None
-
+    
     except Exception as e:
-        return False, str(e)
+        return False, f"Extraction failed: {str(e)}"
     
 def download_file(storage: AbstractFileSystem, remote_path: str, local_path: str):
     """Скачивает файл из удаленного хранилища в локальный путь"""

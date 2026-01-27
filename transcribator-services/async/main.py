@@ -51,7 +51,6 @@ async def main():
     temp_dir = os.environ['TEMP_DIR']
 
     
-
     app = App(model=model, 
               queue=queue, 
               storage=storage, 
