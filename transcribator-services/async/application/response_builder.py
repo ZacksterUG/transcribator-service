@@ -37,6 +37,15 @@ class ResponseBuilder:
             results=results,
             error=error
         )
+    
+    def build_error_response(self, job_id: str, error_message: str) -> Response:
+        return Response(
+            job_id=job_id,
+            status="failed",
+            completed_at=datetime.datetime.now(datetime.timezone.utc),
+            results=[],
+            error=error_message
+        )
 
     async def send_error_response(self, job_id: str, error_msg: str):
         """

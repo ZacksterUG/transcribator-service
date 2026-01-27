@@ -15,7 +15,7 @@ MAX_ARCHIVE_FILES = 1000
 MAX_COMPRESSION_RATIO = 100.0  # 1:100
 
 
-class FileDownloadManager:
+class FileManager:
     """
     Manages downloading and extracting files from storage.
     """
@@ -173,6 +173,10 @@ class FileDownloadManager:
                 errors.append(f"Timeout downloading {remote_path}: {e}")
                 
         return local_paths, errors
+    
+    async def upload_result_json(self, data: str, remote_path: str):
+        with self.storage.open(remote_path, 'w') as file:
+            file.write(data)
 
     async def download_audio_files(self, request: Request, job_temp_dir: str) -> Tuple[List[str], List[str]]:
         """

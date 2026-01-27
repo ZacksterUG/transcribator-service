@@ -37,20 +37,20 @@ class NatsQueue(IMessageQueue):
     async def subscribe(self, topic: str, handler: Callable) -> None:
         if not self.nc:
             raise RuntimeError("Not connected to NATS")
-        
+
         if self.use_jetstream:
             if not self.js:
                 raise RuntimeError("JetStream not initialized")
-            
+
             # ФИКСИРОВАННОЕ имя для всех реплик
             durable_name = "transcriber-workers"
-            
+
             psub = await self.js.pull_subscribe(
                 subject=topic,
                 durable=durable_name,
                 stream=f"STREAM_{topic.replace('.', '_').upper()}"
             )
-            
+
             # Обёртка над handler с поддержкой in_progress
             async def handler_with_heartbeat(msg):
                 # Запускаем heartbeat если поддерживается
@@ -67,7 +67,7 @@ class NatsQueue(IMessageQueue):
                             pass  # игнорируем ошибки heartbeat
                         
                     heartbeat_task = asyncio.create_task(heartbeat())
-                
+
                 try:
                     # Вызываем оригинальный handler
                     await handler(msg)
@@ -93,10 +93,10 @@ class NatsQueue(IMessageQueue):
                     except Exception as e:
                         print(f"Pull error: {e}")
                         await asyncio.sleep(1)
-            
+
             task = asyncio.create_task(pull_loop())
             self._subscriptions.append(task)
-            
+
         else:
             # core NATS
             sub = await self.nc.queue_subscribe(
@@ -190,7 +190,8 @@ class NatsQueue(IMessageQueue):
                 max_age=max_age,
                 storage=storage,
                 max_msgs=max_msgs,
-                num_replicas=1
+                num_replicas=1,
+                
             )
         except Exception as e:
             if "already in use" in str(e).lower():

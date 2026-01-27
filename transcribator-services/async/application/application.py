@@ -11,7 +11,7 @@ from .message_queue.abstractions.message_queue import IMessageQueue
 import fsspec
 from .utils import *
 from .classes import *
-from .file_download_manager import FileDownloadManager
+from .file_manager import FileManager
 from .audio_processor import AudioProcessor
 from .response_builder import ResponseBuilder
 from .temp_file_manager import TempFileManager
@@ -42,7 +42,7 @@ class App:
         self.debug = debug
 
         # Initialize the component managers
-        self.file_download_manager = FileDownloadManager(storage, self.logger)
+        self.file_download_manager = FileManager(storage, self.logger)
         self.audio_processor = AudioProcessor(model, self.logger)
         self.response_builder = ResponseBuilder(response_topic, queue, self.logger)
         self.temp_file_manager = TempFileManager(temp_dir, self.logger)

@@ -1,4 +1,5 @@
 import datetime
+import os
 from typing import List, Literal, Optional, Union
 from .transcribation_model.segment import Segment
 
@@ -12,6 +13,14 @@ class AudioSource:
         self.path = path
         self.archive = archive
         self.file_list = file_list
+
+    def get_parent_dir(self):
+        if self.path:
+            return os.path.dirname(self.path)
+        elif self.archive:
+            return os.path.dirname(self.archive)
+        else:
+            return os.path.dirname(self.file_list[0])
 
 class Request:
     job_id: str
