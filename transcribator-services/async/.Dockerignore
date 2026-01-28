@@ -49,6 +49,9 @@ build/
 *.whl
 *.tar.gz
 
+# Docker
+.dockerignore
+
 # Минио / медиа (если используется)
 media/
 uploads/
