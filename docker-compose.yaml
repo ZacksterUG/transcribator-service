@@ -76,6 +76,37 @@ services:
     networks:
       - transcription-net
 
+  transcribator-async:
+    container_name: transcribator-async
+    build:
+      context: ./transcribator-services/async
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - nats
+      - redis
+      - minio
+    volumes:
+      - ./models:/app/models
+    environment:
+      - STORAGE_TYPE=${STORAGE_TYPE}
+      - MINIO_URL=${MINIO_URL}
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+      - MINIO_BUCKET=${MINIO_BUCKET}
+      - QUEUE_TYPE=${QUEUE_TYPE}
+      - NATS_SERVERS=${NATS_SERVERS}
+      - REQUEST_TOPIC=${REQUEST_TOPIC}
+      - RESPONSE_TOPIC=${RESPONSE_TOPIC}
+      - MODEL_NAME=${MODEL_NAME}
+      - MODEL_PATH_OR_SIZE=${MODEL_PATH_OR_SIZE}
+      - MODEL_DEVICE=${MODEL_DEVICE}
+      - MODEL_COMPUTE_TYPE=${MODEL_COMPUTE_TYPE}
+      - MODEL_NUM_WORKERS=${MODEL_NUM_WORKERS}
+      - TEMP_DIR=${TEMP_DIR}
+    networks:
+      - transcription-net
 
 networks:
   transcription-net:
