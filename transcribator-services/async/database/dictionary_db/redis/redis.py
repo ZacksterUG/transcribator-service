@@ -1,10 +1,8 @@
 import json
-import redis
 from typing import Any, Optional, Dict
 from redis.lock import Lock as RedisLock
-
 from ..database import DictionaryDatabase, LockContext, DictionaryDatabaseCreator
-
+import redis
 
 class RedisReadLock:
     """
@@ -141,7 +139,7 @@ class RedisDatabase(DictionaryDatabase):
     Реализация DictionaryDatabase на основе Redis.
     """
 
-    def __init__(self, host: str = 'localhost', port: int = 6379, db: int = 0, 
+    def __init__(self, host: str = 'localhost', port: int = 6379, db: int = 0,
                  password: Optional[str] = None, decode_responses: bool = False,
                  client: Optional[redis.Redis] = None):
         """

@@ -1,8 +1,6 @@
 import asyncio
-import logging
 import os
 from pathlib import Path, PurePosixPath
-import shutil
 from typing import List, Tuple
 from fsspec import AbstractFileSystem
 from .utils import download_file, extract_archive, generate_random_filename, run_with_timeout

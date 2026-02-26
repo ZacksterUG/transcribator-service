@@ -1,7 +1,7 @@
 import datetime
 import os
 from typing import List, Literal, Optional, Union
-from .transcribation_model.segment import Segment
+from transcribation_model.classes import Segment
 
 
 class AudioSource:

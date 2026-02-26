@@ -1,4 +1,3 @@
-import json
 import datetime
 from typing import List
 from .classes import Response, Result

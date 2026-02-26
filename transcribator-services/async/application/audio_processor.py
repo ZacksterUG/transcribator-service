@@ -1,8 +1,7 @@
 import asyncio
-import datetime
-from typing import List
-from .transcribation_model.model import IModel
-from .transcribation_model.request import TranscriptionRequest
+from typing import List, Any
+from transcribation_model.interfaces import IModel
+from transcribation_model.classes import TranscriptionRequest
 from .utils import convert_audio_to_16khz, run_with_timeout
 from .classes import Result
 
@@ -18,7 +17,7 @@ class AudioProcessor:
         self.model = model
         self.logger = logger or __import__('logging').getLogger(__name__)
 
-    async def process_audio_file(self, local_path: str, language=None, temperature=0.0, vad_filter=True) -> Result:
+    async def process_audio_file(self, local_path: str, language=None, temperature=0.0, vad_filter=True, ctx: Any = None) -> Result:
         """
         Processes a single audio file by converting it and running transcription.
         
@@ -27,6 +26,7 @@ class AudioProcessor:
             language: Language for transcription
             temperature: Temperature setting for model
             vad_filter: Whether to use VAD filter
+            ctx: Optional context to processor
             
         Returns:
             Result object with transcription segments or error
@@ -44,10 +44,16 @@ class AudioProcessor:
                 language=language,
                 temperature=temperature,
                 sample_rate=16000,
-                vad_filter=vad_filter
+                vad_filter=vad_filter,
+                ctx=ctx
             )
 
-            segments_coro = asyncio.to_thread(self.model.predict, transcription_request)
+            segments_coro = asyncio.to_thread(
+                self.model.predict,
+                transcription_request,
+                ctx  # 🆕 Передаём ctx вторым аргументом!
+            )
+
             segments = await run_with_timeout(
                 segments_coro,
                 TRANSCRIPTION_TIMEOUT,
@@ -61,13 +67,14 @@ class AudioProcessor:
         except Exception as e:
             return Result(segments=[], error=f"Error processing file {local_path}: {str(e)}")
 
-    async def process_audio_files(self, local_paths: List[str], request) -> List[Result]:
+    async def process_audio_files(self, local_paths: List[str], request, ctx: Any = None) -> List[Result]:
         """
         Processes multiple audio files.
         
         Args:
             local_paths: List of paths to local audio files
             request: The original request containing settings
+            ctx: Optional context to pass to processor
             
         Returns:
             List of Result objects
@@ -78,7 +85,8 @@ class AudioProcessor:
                 local_path,
                 language=getattr(request, 'language', None),
                 temperature=getattr(request, 'temperature', 0.0),
-                vad_filter=getattr(request, 'vad_filter', True)
+                vad_filter=getattr(request, 'vad_filter', True),
+                ctx=ctx
             )
             results.append(result)
             

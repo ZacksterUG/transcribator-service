@@ -1,13 +1,7 @@
-import asyncio
-from contextlib import asynccontextmanager
-import json
 import logging
-import os
-import datetime
-import signal
-from typing import Set, Optional
-from .transcribation_model.model import IModel
-from .message_queue.abstractions.message_queue import IMessageQueue
+from typing import Set
+from transcribation_model.interfaces import IModel
+from message_queue.abstractions.message_queue import IMessageQueue
 import fsspec
 from .utils import *
 from .classes import *
@@ -16,7 +10,7 @@ from .audio_processor import AudioProcessor
 from .response_builder import ResponseBuilder
 from .temp_file_manager import TempFileManager
 from .message_handler import MessageHandler
-from .database.dictionary_db.database import DictionaryDatabase
+from database.dictionary_db.database import DictionaryDatabase
 
 SHUTDOWN_TIMEOUT = 10
 

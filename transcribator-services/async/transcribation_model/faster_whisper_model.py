@@ -4,12 +4,8 @@ from io import BytesIO
 import librosa
 from faster_whisper import WhisperModel
 
-from .model import IModel
-from .segment import Segment
-from .request import TranscriptionRequest
-from .exceptions import TranscriptionError, ModelNotReadyError, InvalidAudioError
-from .word import Word
-from .model_factory import IModelCreator
+from .interfaces import IModel, IModelCreator
+from .classes import TranscriptionRequest, TranscriptionError, Segment, Word, ModelNotReadyError
 
 
 class FasterWhisperModel(IModel):
@@ -54,12 +50,13 @@ class FasterWhisperModel(IModel):
         except Exception as e:
             raise ModelNotReadyError(f"Failed to initialize Whisper model: {str(e)}")
     
-    def predict(self, request: TranscriptionRequest) -> List[Segment]:
+    def predict(self, request: TranscriptionRequest, ctx: Any = None) -> List[Segment]:
         """
         Выполняет транскрибацию аудио
         
         Args:
             request: Запрос на транскрибацию с аудио и параметрами
+            ctx: Заданный контекст для модели
             
         Returns:
             Список сегментов транскрибации
