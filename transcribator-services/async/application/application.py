@@ -16,6 +16,7 @@ from .audio_processor import AudioProcessor
 from .response_builder import ResponseBuilder
 from .temp_file_manager import TempFileManager
 from .message_handler import MessageHandler
+from .database.dictionary_db.database import DictionaryDatabase
 
 SHUTDOWN_TIMEOUT = 10
 
@@ -28,6 +29,7 @@ class App:
         storage: fsspec.AbstractFileSystem,
         request_topic: str,
         response_topic: str,
+        dict_db: DictionaryDatabase,
         temp_dir: str = './temp',
         logger: Optional[logging.Logger] = None,
         debug: bool = False
@@ -38,6 +40,7 @@ class App:
         self.request_topic = request_topic
         self.response_topic = response_topic
         self.temp_dir = temp_dir
+        self.dict_db = dict_db
         self.logger = logger or logging.getLogger("transcriber")
         self.debug = debug
 
@@ -51,6 +54,7 @@ class App:
             self.audio_processor,
             self.response_builder,
             self.temp_file_manager,
+            dict_db,
             self.logger
         )
 
@@ -68,6 +72,9 @@ class App:
                 await self.queue.health_check()
             elif not (hasattr(self.queue, 'nc') and self.queue.nc is not None):
                 raise Exception("Queue connection is not established")
+
+            if not self.dict_db.ping():
+                raise Exception(f"failed to connect to dict db {self.dict_db.name()}")
             self.logger.info('health check successful')
             return True
         except Exception as e:

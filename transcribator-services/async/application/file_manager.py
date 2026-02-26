@@ -1,11 +1,13 @@
 import asyncio
+import logging
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 from typing import List, Tuple
 from fsspec import AbstractFileSystem
 from .utils import download_file, extract_archive, generate_random_filename, run_with_timeout
 from .classes import Request
+from logging import Logger
 
 DOWNLOAD_TIMEOUT = 300
 EXTRACT_TIMEOUT = 300
@@ -14,13 +16,15 @@ MAX_ARCHIVE_UNCOMPRESSED_SIZE = 1_073_741_824  # 1 ГБ
 MAX_ARCHIVE_FILES = 1000
 MAX_COMPRESSION_RATIO = 100.0  # 1:100
 
+class ResultFileExistsError(Exception):
+    pass
 
 class FileManager:
     """
     Manages downloading and extracting files from storage.
     """
     
-    def __init__(self, storage: AbstractFileSystem, logger=None):
+    def __init__(self, storage: AbstractFileSystem, logger: Logger=None):
         
         self.storage = storage
         self.logger = logger or __import__('logging').getLogger(__name__)
@@ -57,6 +61,9 @@ class FileManager:
             errors.append(f"Timeout downloading {remote_path}: {e}")
             
         return local_paths, errors
+    def file_exists(self, remote_path):
+        p = Path(remote_path)
+        return self.storage.isfile(remote_path) and self.storage.exists(remote_path)
 
     async def download_and_extract_archive(self, remote_path: str, job_temp_dir: str) -> Tuple[List[str], List[str]]:
          """
@@ -175,8 +182,20 @@ class FileManager:
         return local_paths, errors
     
     async def upload_result_json(self, data: str, remote_path: str):
-        with self.storage.open(remote_path, 'w') as file:
+        if self.storage.exists(remote_path):
+            raise ResultFileExistsError(f"File {remote_path} already exists")
+
+        # PurePosixPath гарантирует forward slashes для S3-совместимости
+        path = PurePosixPath(remote_path)
+        file_temp_path = path.parent / generate_random_filename()
+
+        # Конвертируем в str — PurePosixPath уже вернёт путь с "/"
+        file_temp_path_str = str(file_temp_path)
+
+        with self.storage.open(file_temp_path_str, 'w') as file:
             file.write(data)
+
+        self.storage.rename(file_temp_path_str, remote_path)
 
     async def download_audio_files(self, request: Request, job_temp_dir: str) -> Tuple[List[str], List[str]]:
         """

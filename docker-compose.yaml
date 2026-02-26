@@ -42,7 +42,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_:/data
-    command: redis-server --appendonly yes --save 60 1 --dir /data
+    command: redis-server --appendonly yes --save 60 1 --dir /data --requirepass ${REDIS_PASSWORD}
     networks:
       - transcription-net
 
@@ -105,6 +105,10 @@ services:
       - MODEL_COMPUTE_TYPE=${MODEL_COMPUTE_TYPE}
       - MODEL_NUM_WORKERS=${MODEL_NUM_WORKERS}
       - TEMP_DIR=${TEMP_DIR}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${ASYNC_REDIS_DB}
     networks:
       - transcription-net
 

@@ -28,12 +28,19 @@ COPY --from=builder /opt/pydeps /opt/pydeps
 ENV PATH="/opt/pydeps/bin:$PATH"
 ENV PYTHONPATH="/opt/pydeps/lib/python3.10/site-packages:$PYTHONPATH"
 
+# Создаем директории для кэша
+RUN mkdir -p /tmp/numba_cache /tmp/librosa_cache
+
 COPY . .
 
 # Безопасный пользователь
 RUN useradd -r -u 1000 transcriber && \
-    chown -R transcriber:transcriber /app
+    chown -R transcriber:transcriber /app /tmp/numba_cache /tmp/librosa_cache
 USER transcriber
+
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache
+ENV LIBROSA_CACHE_DIR=/tmp/librosa_cache
+ENV NUMBA_DISABLE_PERFORMANCE_WARNINGS=1
 
 RUN pip install --prefix=/opt/pydeps --no-cache-dir s3fs==2026.1.0
 

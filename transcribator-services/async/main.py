@@ -14,6 +14,8 @@ from application.storage.storage_creator.s3_storage.s3_storage import S3StorageC
 from application.transcribation_model.model_factory import ModelFactory
 from application.transcribation_model.faster_whisper_model import FasterWhisperCreator
 
+from application.database.dictionary_db.redis.redis import RedisDatabaseCreator
+
 from application.application import App
 from logger import setup_logger
 import os
@@ -45,6 +47,17 @@ async def main():
     model_params = {"model_size_or_path": model_path_or_size, "device": model_device, "compute_type": model_compute_type, "num_workers": model_num_workers}
     model = ModelFactory.create(model_creator, model_params)
 
+    redis_host = os.environ['REDIS_HOST']
+    redis_port = int(os.environ['REDIS_PORT'])
+    redis_db = int(os.environ['REDIS_DB'])
+    redis_password = os.environ['REDIS_PASSWORD']
+    rdc = RedisDatabaseCreator()
+    redis_db = rdc.create(params={
+        "host": redis_host,
+        "port": redis_port,
+        "db": redis_db,
+        "password": redis_password
+    })
 
     request_topic = os.environ['REQUEST_TOPIC']
     response_topic = os.environ['RESPONSE_TOPIC']
@@ -58,7 +71,8 @@ async def main():
               response_topic=response_topic, 
               temp_dir=temp_dir, 
               logger=logger,
-              debug=True)
+              debug=True,
+              dict_db=redis_db)
 
     await app.run()
 

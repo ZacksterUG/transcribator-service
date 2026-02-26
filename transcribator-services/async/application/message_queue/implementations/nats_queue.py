@@ -1,22 +1,29 @@
 import asyncio
+import logging
 from typing import Any, Dict, Callable, List, Optional
 from ..abstractions.message_queue import IMessageQueue
 from ..queue_creator.base_creator import IQueueCreator
 import nats
 from nats.aio.client import Client
 from nats.js import JetStreamContext
-from nats.js.api import KeyValueConfig
+from nats.js.api import KeyValueConfig, ConsumerConfig, AckPolicy
+from nats.aio.msg import Msg
+
 
 class NatsQueue(IMessageQueue):
-    def __init__(self, servers: list, use_jetstream: bool = False, **kwargs):
+    def __init__(self, servers: list, use_jetstream: bool = False,
+                 ack_wait: int = 60, max_concurrent: int = 10, **kwargs):
         if not nats:
             raise RuntimeError("nats-py is not installed")
         self.servers = servers
-        self.use_jetstream = use_jetstream  # <-- НОВЫЙ ПАРАМЕТР
+        self.use_jetstream = use_jetstream
+        self.ack_wait = ack_wait  # <-- Время ожидания ACK
+        self.max_concurrent = max_concurrent  # <-- Лимит параллельных задач
         self.nc: Client = None
         self.js: Optional[JetStreamContext] = None
         self.kwargs = kwargs
         self._subscriptions: List[Any] = []
+        self.logger = logging.getLogger(__name__)  # <-- FIX: инициализация логгера
 
     async def connect(self) -> None:
         self.nc = await nats.connect(servers=self.servers, **self.kwargs)
@@ -26,7 +33,7 @@ class NatsQueue(IMessageQueue):
     async def publish(self, topic: str, message: bytes) -> None:
         if not self.nc:
             raise RuntimeError("Not connected to NATS")
-        
+
         if self.use_jetstream:
             if not self.js:
                 raise RuntimeError("JetStream not initialized")
@@ -44,33 +51,55 @@ class NatsQueue(IMessageQueue):
 
             # ФИКСИРОВАННОЕ имя для всех реплик
             durable_name = "transcriber-workers"
+            stream_name = f"STREAM_{topic.replace('.', '_').upper()}"
 
             psub = await self.js.pull_subscribe(
                 subject=topic,
                 durable=durable_name,
-                stream=f"STREAM_{topic.replace('.', '_').upper()}"
+                stream=stream_name,
+                config=ConsumerConfig(
+                    ack_policy=AckPolicy.EXPLICIT,
+                    ack_wait=self.ack_wait,  # <-- 60 секунд
+                    max_ack_pending=self.max_concurrent  # <-- Лимит на уровне сервера
+                )
             )
 
-            # Обёртка над handler с поддержкой in_progress
-            async def handler_with_heartbeat(msg):
-                # Запускаем heartbeat если поддерживается
-                heartbeat_task = None
-                if hasattr(msg, 'in_progress'):
-                    async def heartbeat():
-                        try:
-                            while True:
-                                await msg.in_progress()
-                                await asyncio.sleep(3)  # каждые 3 секунды
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception:
-                            pass  # игнорируем ошибки heartbeat
-                        
-                    heartbeat_task = asyncio.create_task(heartbeat())
+            # Semaphore для ограничения конкурентности
+            semaphore = asyncio.Semaphore(self.max_concurrent)
 
+            async def handler_with_heartbeat(msg: Msg):
+                heartbeat_task = None
                 try:
+                    # Запускаем heartbeat если поддерживается
+                    if hasattr(msg, 'in_progress'):
+                        async def heartbeat():
+                            try:
+                                while True:
+                                    await asyncio.sleep(self.ack_wait / 3)
+                                    await msg.in_progress()
+                            except asyncio.CancelledError:
+                                raise
+                            except Exception as e:
+                                self.logger.warning(f"Heartbeat error: {e}")
+
+                        heartbeat_task = asyncio.create_task(heartbeat())
+
                     # Вызываем оригинальный handler
                     await handler(msg)
+
+                    # ✅ ACK только после успешного завершения handler
+                    await msg.ack()
+                    self.logger.debug(f"Message acknowledged: {msg.subject}")
+
+                except Exception as e:
+                    self.logger.error(f"Handler error: {e}", exc_info=True)
+                    # ✅ NAK при ошибке (сообщение вернётся в очередь)
+                    try:
+                        await msg.nak()
+                        self.logger.debug(f"Message nacked, will redeliver")
+                    except Exception as nak_err:
+                        self.logger.error(f"Failed to nak: {nak_err}")
+                    raise  # Пробрасываем исключение дальше
                 finally:
                     # Отменяем heartbeat
                     if heartbeat_task:
@@ -79,26 +108,26 @@ class NatsQueue(IMessageQueue):
                             await heartbeat_task
                         except asyncio.CancelledError:
                             pass
-                        
-            # Запускаем фоновую задачу для pull-обработки
+
             async def pull_loop():
                 while True:
                     try:
-                        messages = await psub.fetch(1, timeout=5)
-                        for msg in messages:
-                            # Запускаем обработку как отдельную задачу
-                            asyncio.create_task(handler_with_heartbeat(msg))
+                        # Ограничиваем конкурентность на уровне клиента
+                        async with semaphore:
+                            messages = await psub.fetch(1, timeout=5)
+                            for msg in messages:
+                                asyncio.create_task(handler_with_heartbeat(msg))
                     except asyncio.TimeoutError:
                         continue
                     except Exception as e:
-                        print(f"Pull error: {e}")
+                        self.logger.error(f"Pull error: {e}", exc_info=True)
                         await asyncio.sleep(1)
 
             task = asyncio.create_task(pull_loop())
             self._subscriptions.append(task)
 
         else:
-            # core NATS
+            # Core NATS
             sub = await self.nc.queue_subscribe(
                 subject=topic,
                 queue="transcriber-workers",
@@ -107,25 +136,21 @@ class NatsQueue(IMessageQueue):
             self._subscriptions.append(sub)
 
     async def close(self) -> None:
-        """Корректное закрытие NATS соединения"""
         if not self.nc:
             return
 
-        # Отменяем все подписки и задачи
         for sub_or_task in self._subscriptions:
             try:
                 if isinstance(sub_or_task, asyncio.Task):
                     sub_or_task.cancel()
                     await sub_or_task
                 else:
-                    # Это подписка (для core NATS)
                     await sub_or_task.unsubscribe()
             except Exception:
                 pass
-            
+
         self._subscriptions.clear()
 
-        # Закрываем соединение
         try:
             await self.nc.drain()
         except Exception:
@@ -142,7 +167,6 @@ class NatsQueue(IMessageQueue):
     async def health_check(self) -> bool:
         if not self.nc:
             return False
-            
         try:
             if not self.nc.is_connected and not self.nc.is_reconnecting:
                 return False
@@ -150,15 +174,17 @@ class NatsQueue(IMessageQueue):
             return True
         except Exception:
             return False
-        
+
     async def ack_message(self, message_context: Any) -> None:
         """Подтверждает сообщение если это JetStream."""
+        # <-- FIX: ACK теперь внутри handler_with_heartbeat, этот метод можно удалить
+        # или оставить для совместимости с интерфейсом
         if self.use_jetstream and hasattr(message_context, 'ack'):
             try:
                 await message_context.ack()
             except Exception as e:
                 self.logger.debug(f"Failed to ack message: {e}")
-    
+
     async def nack_message(self, message_context: Any) -> None:
         """Отклоняет сообщение если это JetStream."""
         if self.use_jetstream and hasattr(message_context, 'nak'):
@@ -168,21 +194,18 @@ class NatsQueue(IMessageQueue):
                 self.logger.debug(f"Failed to nak message: {e}")
 
     async def ensure_topic_exists(self, topic: str, **kwargs) -> None:
-        """Создаёт JetStream стрим для топика, если используется JetStream."""
         if not self.use_jetstream:
-            # Core NATS не требует создания топиков
             return
-        
+
         if not self.js:
             raise RuntimeError("JetStream not initialized")
-        
+
         try:
-            # Параметры по умолчанию, можно переопределить через kwargs
             retention = kwargs.get('retention', nats.js.api.RetentionPolicy.LIMITS)
-            max_age = kwargs.get('max_age', 72 * 3600)  # 72 часа
+            max_age = kwargs.get('max_age', 72 * 3600)
             storage = kwargs.get('storage', nats.js.api.StorageType.FILE)
-            max_msgs = kwargs.get('max_msgs', -1)
-            
+            max_msgs = kwargs.get('max_msgs', 2)
+
             await self.js.add_stream(
                 name=f"STREAM_{topic.replace('.', '_').upper()}",
                 subjects=[topic],
@@ -191,17 +214,14 @@ class NatsQueue(IMessageQueue):
                 storage=storage,
                 max_msgs=max_msgs,
                 num_replicas=1,
-                
             )
         except Exception as e:
             if "already in use" in str(e).lower():
-                # Стрим уже существует - это нормально
                 pass
             else:
                 raise
-            
+
     async def ensure_topics_exist(self, topics: List[str], **kwargs) -> None:
-        """Гарантирует существование нескольких топиков."""
         for topic in topics:
             await self.ensure_topic_exists(topic, **kwargs)
         
@@ -214,16 +234,19 @@ class NatsQueueCreator(IQueueCreator):
         # Извлекаем специфичные параметры
         servers = params["servers"]
         use_jetstream = params.get("use_jetstream", False)
-        
-        # Остальные параметры передаём как есть
+        ack_wait = params.get("ack_wait", 60)  # <-- FIX: параметр из конфига
+        max_concurrent = params.get("max_concurrent", 10)
+
         other_params = {
-            k: v for k, v in params.items() 
-            if k not in ["servers", "use_jetstream"]
+            k: v for k, v in params.items()
+            if k not in ["servers", "use_jetstream", "ack_wait", "max_concurrent"]
         }
         
         return NatsQueue(
             servers=servers, 
             use_jetstream=use_jetstream,
+            ack_wait=ack_wait,
+            max_concurrent=max_concurrent,
             **other_params
         )
     
