@@ -55,7 +55,7 @@ uploads/
 files/
 
 # Специфичное для ML (опционально)
-models/
+./models/
 checkpoints/
 runs/
 wandb/

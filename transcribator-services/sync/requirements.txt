@@ -1,0 +1,13 @@
+# NATS
+nats-py==2.14.0
+# Redis
+redis==7.3.0
+# Sherpa-ONNX (модель транскрибации)
+sherpa-onnx==1.12.29
+sherpa-onnx-bin==1.12.29
+sherpa-onnx-core==1.12.29
+# NumPy
+numpy==2.3.5
+# python-dotenv (загрузка .env)
+python-dotenv>=1.2.2
+
