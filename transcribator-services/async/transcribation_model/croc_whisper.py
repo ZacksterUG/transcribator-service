@@ -1,4 +1,3 @@
-# models/croc_whisper.py
 import time
 import hashlib
 import logging
@@ -204,7 +203,7 @@ class CrocWhisperModel(IModel):
         # Извлекаем job_id из контекста
 
         job_id = ctx.get('job_id') if isinstance(ctx, dict) else None
-        log = ctx.get('log') if isinstance(ctx, dict) and isinstance(ctx.get('log'), Logger) else None
+        log = ctx.get('logger') if isinstance(ctx, dict) and isinstance(ctx.get('logger'), Logger) else None
         if not job_id:
             raise TranscriptionError("job_id required in context")
 
@@ -221,10 +220,11 @@ class CrocWhisperModel(IModel):
 
         if not task_id:
             # 3. Новая задача: отправляем в API
-            log.info(f"New transcription: job={job_id}, hash={fhash}")
             task_id = self._submit(request.audio_bytes, request.language)
             if not self._register_task(job_id, fhash, task_id):
                 log.warning(f"Redis registration failed, but continuing with task_id={task_id}")
+
+        log.info(f"Handling task {task_id}")
 
         # 4. Polling с таймаутом
         start = time.time()

@@ -13,7 +13,7 @@ class StorageFactory:
         """
         Создаёт файловую систему указанного типа.
 
-        :param Creator: тип хранилища ('local', 's3')
+        :param creator: тип хранилища ('local', 's3')
         :param params: параметры инициализации (зависят от типа)
         :return: экземпляр fsspec.AbstractFileSystem
         :raises ValueError: если тип не поддерживается

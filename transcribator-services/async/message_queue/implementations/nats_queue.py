@@ -6,7 +6,7 @@ from ..queue_creator.base_creator import IQueueCreator
 import nats
 from nats.aio.client import Client
 from nats.js import JetStreamContext
-from nats.js.api import KeyValueConfig, ConsumerConfig, AckPolicy
+from nats.js.api import ConsumerConfig, AckPolicy
 from nats.aio.msg import Msg
 
 
@@ -224,6 +224,9 @@ class NatsQueue(IMessageQueue):
     async def ensure_topics_exist(self, topics: List[str], **kwargs) -> None:
         for topic in topics:
             await self.ensure_topic_exists(topic, **kwargs)
+
+    async def get_name(self) -> str:
+        return 'Nats'
         
 class NatsQueueCreator(IQueueCreator):
     def create_queue(self, params: Dict[str, Any]) -> IMessageQueue:

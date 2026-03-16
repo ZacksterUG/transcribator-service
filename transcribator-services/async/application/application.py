@@ -61,11 +61,13 @@ class App:
         try:
             if not self.model.health_check():
                 raise Exception("Model health check failed")
+            self.logger.info(f'model={self.model.model_name} health check passed')
             self.storage.info('')
             if hasattr(self.queue, 'health_check'):
                 await self.queue.health_check()
             elif not (hasattr(self.queue, 'nc') and self.queue.nc is not None):
                 raise Exception("Queue connection is not established")
+            self.logger.info(f'message broker={await self.queue.get_name()} health check passed')
 
             if not self.dict_db.ping():
                 raise Exception(f"failed to connect to dict db {self.dict_db.name()}")

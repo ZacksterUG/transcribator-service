@@ -1,5 +1,4 @@
 from typing import List, Optional, Dict, Any
-import numpy as np
 from io import BytesIO
 import librosa
 from faster_whisper import WhisperModel

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Any, Dict
-from .classes import TranscriptionRequest, TranscriptionError, Segment, Word, ModelNotReadyError
+from .classes import TranscriptionRequest, Segment
 
 class IModel(ABC):
     @abstractmethod

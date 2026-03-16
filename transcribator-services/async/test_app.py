@@ -2,6 +2,8 @@ import json
 import os
 import datetime
 import asyncio
+import uuid
+
 import nats
 from nats.js.api import RetentionPolicy, StorageType
 
@@ -16,8 +18,11 @@ NATS_SERVERS = ['nats://localhost:4222']
 REQUEST_TOPIC = "transcriber.async.request"
 RESPONSE_TOPIC = "transcriber.async.response"  # добавьте этот топик в .env
 
-JOB_ID = "test-job-123"
-FILE_PATH = "audio.mp3"
+JOB_ID = str(uuid.uuid4())
+FILE_PATH = "audio_extended.mp4"
+# audio.mp3
+# audio_extended.mp4
+# archive.zip
 FILE_NAME = os.path.basename(FILE_PATH)
 
 def upload_to_minio():
@@ -33,10 +38,10 @@ def upload_to_minio():
 
     remote_path = f"transcribe/{JOB_ID}/{FILE_NAME}"
 
-    print(f"📁 Uploading {FILE_PATH} to s3://{MINIO_BUCKET}/{remote_path}")
+    print(f"📁 Uploading {FILE_PATH} to s3:///{remote_path}")
 
     with open(FILE_PATH, 'rb') as local_file:
-        with fs.open(f"{MINIO_BUCKET}/{remote_path}", 'wb') as remote_file:
+        with fs.open(f"/{remote_path}", 'wb') as remote_file:
             remote_file.write(local_file.read())
 
     print(f"✅ File uploaded successfully")
@@ -47,34 +52,22 @@ async def publish_to_nats_jetstream(remote_path):
     nc = await nats.connect(servers=NATS_SERVERS)
     js = nc.jetstream()
     
+    # ИСПОЛЬЗУЕМ ТО ЖЕ ИМЯ СТРИМА, ЧТО И В NATSQUEUE!
+    STREAM_NAME = f"STREAM_{REQUEST_TOPIC.replace('.', '_').upper()}"  # ← КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
+    
     # Гарантируем существование стримов
     try:
-        # Стрим для запросов
         await js.add_stream(
-            name="TRANSCRIBE_REQUESTS",
+            name=STREAM_NAME,  # ← ИСПРАВЛЕНО
             subjects=[REQUEST_TOPIC],
             retention=RetentionPolicy.LIMITS,
-            max_age=72 * 3600,  # 72 часа
+            max_age=72 * 3600,
             storage=StorageType.FILE
         )
-        print("✅ Request stream ensured")
+        print(f"✅ Stream {STREAM_NAME} ensured")
     except Exception as e:
         if "already in use" not in str(e).lower():
-            print(f"⚠️  Failed to create request stream: {e}")
-    
-    try:
-        # Стрим для ответов
-        await js.add_stream(
-            name="TRANSCRIBE_RESPONSES",
-            subjects=[RESPONSE_TOPIC],
-            retention=RetentionPolicy.LIMITS,
-            max_age=24 * 3600,  # 24 часа
-            storage=StorageType.FILE
-        )
-        print("✅ Response stream ensured")
-    except Exception as e:
-        if "already in use" not in str(e).lower():
-            print(f"⚠️  Failed to create response stream: {e}")
+            print(f"⚠️ Failed to create stream: {e}")
 
     request_data = {
         "job_id": JOB_ID,
@@ -86,9 +79,9 @@ async def publish_to_nats_jetstream(remote_path):
     }
 
     message = json.dumps(request_data).encode('utf-8')
-
-    print(f"📨 Publishing to JetStream topic '{REQUEST_TOPIC}'")
-    await js.publish(REQUEST_TOPIC, message)  # ← Используем js.publish, не nc.publish!
+    print(f"📨 Publishing to JetStream topic '{REQUEST_TOPIC}' in stream '{STREAM_NAME}'")
+    
+    await js.publish(REQUEST_TOPIC, message)
     print("✅ Message published via JetStream")
 
     await nc.close()

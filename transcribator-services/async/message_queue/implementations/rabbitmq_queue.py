@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, Dict, Callable, List
 from ..abstractions.message_queue import IMessageQueue
 from ..queue_creator.base_creator import IQueueCreator
@@ -107,6 +106,9 @@ class RabbitMQQueue(IMessageQueue):
     async def ensure_topics_exist(self, topics: List[str], **kwargs) -> None:
         for topic in topics:
             await self.ensure_topic_exists(topic, **kwargs)
+
+    async def get_name(self) -> str:
+        return 'RabbitMQ'
 
 class RabbitMQQueueCreator(IQueueCreator):
     def create_queue(self, params: Dict[str, Any]) -> IMessageQueue:

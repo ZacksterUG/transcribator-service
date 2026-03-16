@@ -62,3 +62,10 @@ class IMessageQueue(ABC):
         Гарантирует существование нескольких топиков.
         """
         pass
+
+    @abstractmethod
+    async def get_name(self) -> str:
+        """
+        Имя экземпляра
+        """
+        pass
