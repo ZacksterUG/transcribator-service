@@ -99,7 +99,6 @@ services:
       - NATS_SERVERS=${NATS_SERVERS}
       - REQUEST_TOPIC=${REQUEST_TOPIC}
       - RESPONSE_TOPIC=${RESPONSE_TOPIC}
-      - MODEL_NAME=${MODEL_NAME}
       - MODEL_PATH_OR_SIZE=${MODEL_PATH_OR_SIZE}
       - MODEL_DEVICE=${MODEL_DEVICE}
       - MODEL_COMPUTE_TYPE=${MODEL_COMPUTE_TYPE}
@@ -109,6 +108,41 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${ASYNC_REDIS_DB}
+      - MODEL_TYPE=faster-whisper
+    networks:
+      - transcription-net
+
+  transcribator-sync:
+    container_name: transcribator-sync
+    build:
+      context: ./transcribator-services/sync
+      dockerfile: Dockerfile
+    depends_on:
+      - nats
+      - redis
+    volumes:
+      - ./models:/app/models
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${ASYNC_REDIS_DB}
+      - NATS_SERVERS=${NATS_SERVERS}
+      - MAIN_TOPIC=${SYNC_MAIN_TOPIC}
+      - MODEL_TOKENS=${SYNC_MODEL_TOKENS}
+      - MODEL_ENCODER=${SYNC_MODEL_ENCODER}
+      - MODEL_DECODER=${SYNC_MODEL_DECODER}
+      - MODEL_JOINER=${SYNC_MODEL_JOINER}
+      - MODEL_NUM_THREADS=${SYNC_MODEL_NUM_THREADS}
+      - MODEL_SAMPLE_RATE=${SYNC_MODEL_SAMPLE_RATE}
+      - MODEL_FEATURE_DIM=${SYNC_MODEL_FEATURE_DIM}
+      - MODEL_DECODING_METHOD=${SYNC_MODEL_DECODING_METHOD}
+      - MODEL_ENABLE_ENDPOINT_DETECTION=${SYNC_MODEL_ENABLE_ENDPOINT_DETECTION}
+      - MODEL_RULE1_MIN_TRAILING_SILENCE=${SYNC_MODEL_RULE1_MIN_TRAILING_SILENCE}
+      - MODEL_RULE2_MIN_TRAILING_SILENCE=${SYNC_MODEL_RULE2_MIN_TRAILING_SILENCE}
+      - MODEL_RULE3_MIN_UTTERANCE_LENGTH=${SYNC_MODEL_RULE3_MIN_UTTERANCE_LENGTH}
+      - MAX_ACTIVE_STREAMS=${SYNC_MAX_ACTIVE_STREAMS}
+      - JOB_ACTIVE_TIMEOUT=${SYNC_JOB_ACTIVE_TIMEOUT}
     networks:
       - transcription-net
 
