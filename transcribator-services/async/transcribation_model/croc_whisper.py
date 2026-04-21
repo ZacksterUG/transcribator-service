@@ -100,7 +100,7 @@ class CrocWhisperModel(IModel):
             return False
 
     def _submit(self, audio_bytes: bytes, language: Optional[str]) -> str:
-        url = f"{self.api_base_url}/api/transcribe"
+        url = f"{self.api_base_url}/gateway/transcribe"
         files = {'file': ('audio.wav', audio_bytes, 'audio/wav')}
         data = {'language': language} if language else {}
 
@@ -116,7 +116,7 @@ class CrocWhisperModel(IModel):
             raise TranscriptionError(f"Submit failed: {e}")
 
     def _poll(self, task_id: str) -> Dict[str, Any]:
-        url = f"{self.api_base_url}/api/status/{task_id}"
+        url = f"{self.api_base_url}/gateway/status/{task_id}"
         try:
             resp = self._session.get(url, timeout=self.request_timeout, verify=self.ssl_verify)  # 🆕
             resp.raise_for_status()
@@ -125,7 +125,7 @@ class CrocWhisperModel(IModel):
             raise TranscriptionError(f"Poll failed: {e}")
 
     def _fetch_result(self, task_id: str) -> Dict[str, Any]:
-        url = f"{self.api_base_url}/api/results/{task_id}/json"
+        url = f"{self.api_base_url}/gateway/results/{task_id}/json"
         try:
             resp = self._session.get(url, timeout=self.request_timeout, verify=self.ssl_verify)  # 🆕
             resp.raise_for_status()

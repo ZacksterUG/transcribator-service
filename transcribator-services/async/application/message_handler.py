@@ -1,4 +1,7 @@
+import datetime
 import logging
+from datetime import timezone
+
 from .file_manager import FileManager
 from message_queue.abstractions.message_queue import IMessageQueue
 from .audio_processor import AudioProcessor
@@ -10,7 +13,6 @@ from database.dictionary_db.database import DictionaryDatabase
 
 MAX_MESSAGE_SIZE_BYTES = 1024 * 1024
 MAX_ALLOWED_FILES = 50  # Жёсткий лимит для продакшена
-
 
 class MessageHandler:
     """
@@ -145,6 +147,21 @@ class MessageHandler:
 
                 self.logger.info(f"📥 Processing message (job_id={job_id})")
 
+                async def _publish_ack():
+                    try:
+                        ack_payload = json.dumps({
+                            "job_id": job_id,
+                            "status": "in_progress",
+                            "completed_at": datetime.datetime.now(timezone.utc).isoformat(),
+                            "error_message": ""
+                        }, separators=(',', ':')).encode('utf-8')
+
+                        await queue.publish(self.response_builder.response_topic, ack_payload)
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to publish ACK: {e}")
+
+                asyncio.create_task(_publish_ack())
+
                 try:
                     # --- 6. Основная обработка ---
                     request = self._parse_request(request_data)
@@ -154,6 +171,7 @@ class MessageHandler:
                     await self.temp_file_manager.cleanup_old_temp_dirs()
                     job_temp_dir = self.temp_file_manager.prepare_job_directory(job_id)
                     local_paths, download_errors = await self.file_manager.download_audio_files(request, job_temp_dir)
+                    
                     ctx = {
                         'job_id': job_id,
                         'logger': self.logger,

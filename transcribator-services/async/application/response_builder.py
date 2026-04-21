@@ -32,7 +32,7 @@ class ResponseBuilder:
         return Response(
             job_id=job_id,
             status='completed',
-            completed_at=datetime.datetime.now(),
+            completed_at=datetime.datetime.now(datetime.timezone.utc),
             results=results,
             error=error
         )

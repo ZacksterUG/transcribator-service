@@ -107,19 +107,20 @@ class FasterWhisperModel(IModel):
                     ]
                 
                 # Создаем объект сегмента
-                result_segment = Segment()
-                result_segment.id = idx
-                result_segment.seek = getattr(segment, 'seek', 0)
-                result_segment.start = segment.start
-                result_segment.end = segment.end
-                result_segment.text = segment.text
-                result_segment.tokens = getattr(segment, 'tokens', [])
-                result_segment.avg_logprob = getattr(segment, 'avg_logprob', 0.0)
-                result_segment.compression_ratio = getattr(segment, 'compression_ratio', 0.0)
-                result_segment.no_speech_prob = getattr(segment, 'no_speech_prob', 0.0)
-                result_segment.words = words
-                result_segment.temperature = getattr(segment, 'temperature', request.temperature)
-                
+                result_segment = Segment(
+                    id=idx,
+                    seek = getattr(segment, 'seek', 0),
+                    start = segment.start,
+                    end = segment.end,
+                    text = segment.text,
+                    tokens = getattr(segment, 'tokens', []),
+                    avg_logprob = getattr(segment, 'avg_logprob', 0.0),
+                    compression_ratio = getattr(segment, 'compression_ratio', 0.0),
+                    no_speech_prob = getattr(segment, 'no_speech_prob', 0.0),
+                    words = words,
+                    temperature = getattr(segment, 'temperature', request.temperature),
+                )
+
                 result_segments.append(result_segment)
             
             return result_segments

@@ -52,7 +52,7 @@ class Result:
         self.error = error
 
 class Response:
-    def __init__(self, job_id: str, status: Literal['completed', 'failed'], completed_at: datetime.datetime,
+    def __init__(self, job_id: str, status: Literal['completed', 'failed', 'in_progress'], completed_at: datetime.datetime,
                  results: Optional[List[Result]] = None, error: Union[str, None] = None):
         self.job_id = job_id
         self.status = status
