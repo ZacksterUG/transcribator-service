@@ -62,3 +62,6 @@ wandb/
 
 
 temp_dir
+.aider*
+.gigacode
+/models/

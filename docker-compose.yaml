@@ -60,6 +60,19 @@ services:
     networks:
       - transcription-net
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-web
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    depends_on:
+      - db
+    networks:
+      - transcription-net
+
   migrate:
     image: liquibase/liquibase:4.27
     depends_on:
@@ -146,6 +159,26 @@ services:
     networks:
       - transcription-net
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak-server
+    ports:
+      - "8080:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak_db
+      KC_DB_USERNAME: ${POSTGRESQL_USER}
+      KC_DB_PASSWORD: ${POSTGRESQL_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+    command: start-dev
+    depends_on:
+      - db
+    networks:
+      - transcription-net
+
+        
 networks:
   transcription-net:
     driver: bridge
@@ -154,4 +187,5 @@ volumes:
   minio_: {}
   redis_: {}
   pg_: {}
-  nats_data: {} 
+  nats_data: {}
+  api_uploads: {}
