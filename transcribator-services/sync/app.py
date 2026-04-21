@@ -1,7 +1,7 @@
 import base64
 import json
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable
 import numpy as np
 from nats.aio.client import Msg
 import redis
@@ -62,7 +62,12 @@ class App:
             if not lock.acquire(blocking=False):
                 raise RedisJobLocker(f'job with {job_id} is already running')
 
-            asyncio.create_task(self.handle_messages(lock, job_id))
+            handle_message_task: asyncio.Task
+
+            def cancel_current_task() -> None:
+                handle_message_task.cancel()
+
+            handle_message_task = asyncio.create_task(self.handle_messages(lock, job_id, cancel_current_task))
 
         except json.JSONDecodeError as e:
             err_message = f'Failed to decode JSON data: {str(e)}'
@@ -89,7 +94,7 @@ class App:
 
                 await self.nats_client.publish(f'{self.config.status_topic_prefix}.{job_id}', json.dumps(status_data).encode())
 
-    async def handle_messages(self, lock: Lock, job_id: str) -> None:
+    async def handle_messages(self, lock: Lock, job_id: str, on_finish_cb: Callable=None) -> None:
         self.logger.info(f'start processing job {job_id}...')
         is_finished = False
 
@@ -105,7 +110,8 @@ class App:
                         lock.extend(additional_time=10, replace_ttl=True)
                 except Exception as e:
                     self.logger.error(f"Failed to extend lock {job_id}: {e}")
-                    break
+                    await finish()
+                    return
                 await asyncio.sleep(5)
 
         task_extend_lock = asyncio.create_task(extend_lock())
@@ -136,6 +142,9 @@ class App:
 
             async with self.pool_lock:
                 self.current_active_streams -= 1
+
+            if on_finish_cb is not None:
+                on_finish_cb()
         last_message_date = datetime.now()
 
         async def check_timeout():
@@ -170,6 +179,8 @@ class App:
 
                 audio_b64 = data_json.get('bytes')
 
+                self.logger.info(f'Received audio data from job {job_id}')
+
                 if not audio_b64:
                     raise BytesNotProvidedError('attribute bytes must be provided')
 
@@ -187,6 +198,9 @@ class App:
                     self.recognizer.reset(streamer)
 
                 text = result_obj.strip()
+
+                if text != '':
+                    self.logger.info(f'Transcribed bytes job_id {job_id}: {text}')
 
                 transcription = {
                     'text': text,
@@ -227,6 +241,9 @@ class App:
 
             while True:
                 await asyncio.sleep(0.1)
+        except KeyboardInterrupt:
+            self.logger.warning('Caught keyboard interrupt, shutting down')
+            await self.init_sub.unsubscribe()
         except asyncio.CancelledError as e:
             await self.init_sub.unsubscribe()
             self.logger.error(f'Error occurred while attempting handling jobs: {str(e)}')
