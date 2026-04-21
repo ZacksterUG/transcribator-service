@@ -1,7 +1,7 @@
 CREATE TABLE audit.access_logs (
     id BIGSERIAL PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    token_id UUID REFERENCES auth.api_tokens(id) ON DELETE SET NULL,
+    user_id UUID,
+    token_id UUID,
     action TEXT NOT NULL,
     ip_address INET NOT NULL,
     user_agent TEXT,
