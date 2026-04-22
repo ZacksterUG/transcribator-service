@@ -9,6 +9,7 @@ import (
 	"transcriber-api-gateway/src/database"
 	"transcriber-api-gateway/src/gateway/endpoints"
 	"transcriber-api-gateway/src/gateway/endpoints/async"
+	"transcriber-api-gateway/src/gateway/endpoints/sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -69,6 +70,7 @@ func InitiateHandlers() []gateway.RegisterHandler {
 		endpoints.RegisterRoutes,
 		endpoints.RegisterAuthTest,
 		async.RegisterAsyncEndpoints,
+		sync.RegisterAsyncEndpoints,
 	}
 }
 

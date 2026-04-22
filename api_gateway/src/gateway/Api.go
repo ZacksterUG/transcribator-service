@@ -3,14 +3,18 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/nats-io/nats.go/jetstream"
 	"log"
 	"time"
 	"transcriber-api-gateway/src/database"
 	"transcriber-api-gateway/src/minio"
 	"transcriber-api-gateway/src/nats"
+	"transcriber-api-gateway/src/utils"
 
+	"github.com/bsm/redislock"
 	"github.com/gin-gonic/gin"
+	natslib "github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 
 	"transcriber-api-gateway/src/gateway/middleware/authorization"
@@ -95,7 +99,11 @@ func (agi *GatewayInstance) Setup(handlers []RegisterHandler) {
 		handler(context)
 	}
 
-	err := agi.natsContext.Subscribe(agi.ctx, agi.HandleAsyncResponses())
+	err := agi.natsContext.Subscribe(
+		agi.ctx,
+		agi.HandleAsyncResponses(),
+		agi.HandleSyncStatusFinish(),
+	)
 
 	if err != nil {
 		log.Fatal("Error subscribing to NATS topic:", err)
@@ -147,5 +155,54 @@ func (agi *GatewayInstance) HandleAsyncResponses() func(jetstream.Msg) {
 			logger.Printf("Error updating job status: %v", err)
 			return
 		}
+	}
+}
+
+// Метод для обработки сообщения о завершении синхронного запроса
+func (agi *GatewayInstance) HandleSyncStatusFinish() natslib.MsgHandler {
+	return func(msg *natslib.Msg) {
+		data := &utils.SyncStatus{}
+		err := json.Unmarshal(msg.Data, data)
+
+		if err != nil {
+			agi.logger.Printf("Error unmarshalling json: %v", err)
+			return
+		}
+
+		if data.Status != "finished" {
+			return
+		}
+
+		if data.JobId == "" {
+			agi.logger.Printf("Error handling finishing job: job_id is not provided")
+			return
+		}
+
+		// Проверяем не подхватила ли другая реплика задание на финиш
+		redisClient := agi.redis
+		lockKey := fmt.Sprintf("transcriber.sync.%s.status.finished", data.JobId)
+		ctx := context.Background()
+		locker := redislock.New(redisClient)
+		lock, err := locker.Obtain(ctx, lockKey, 5*time.Second, nil)
+
+		// Кто-то подхватил, пропускаем
+		if err == redislock.ErrNotObtained {
+			return
+		} else if err != nil {
+			agi.logger.Printf("Error obtaining lock for job %v: %v", data.JobId, err)
+			return
+		}
+
+		defer lock.Release(ctx)
+
+		// Ставим завершающий статус синхронной задачи
+		err = agi.databaseContext.JobRepository.UpdateJobStatus(ctx, data.JobId, database.JobStatusFinished, time.Now(), "")
+
+		if err != nil {
+			agi.logger.Printf("Error updating job %v status: %v", data.JobId, err)
+			return
+		}
+
+		agi.logger.Printf("Successfully finished sync job: %v", data.JobId)
 	}
 }

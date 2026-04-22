@@ -45,7 +45,8 @@ func NewNatsConn(
 
 func (nc *NatsContext) Subscribe(
 	ctx context.Context,
-	asyncResponseHanlder func(jetstream.Msg),
+	asyncResponseHandler func(jetstream.Msg),
+	syncStatusUpdateHandler func(*nats.Msg),
 ) error {
 	stream, err := nc.NatsJetStream.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     "STREAM_TRANSCRIBER_ASYNC_RESPONSE",
@@ -67,7 +68,9 @@ func (nc *NatsContext) Subscribe(
 		return err
 	}
 
-	consumer.Consume(asyncResponseHanlder)
+	consumer.Consume(asyncResponseHandler)
+
+	nc.NatsCore.Subscribe("transcriber.sync.status", syncStatusUpdateHandler)
 
 	return nil
 }

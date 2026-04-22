@@ -84,14 +84,14 @@ func (repo *JobRepository) GetJobById(ctx context.Context, uuid string) (*JobMod
 	return &row, nil
 }
 
-func (repo *JobRepository) CreateAsyncJob(ctx context.Context, userId string) (string, error) {
+func (repo *JobRepository) CreateJob(ctx context.Context, userId string, jobType string) (string, error) {
 	query := `
       insert into jobs.transcription_jobs (user_id, mode, status)
-      values ($1, 'async', 'pending') 
+      values ($1, $2, 'pending') 
       returning id, user_id, mode, status
 	`
 
-	rows, err := repo.pool.Query(ctx, query, userId)
+	rows, err := repo.pool.Query(ctx, query, userId, jobType)
 
 	if err != nil {
 		return "", err
@@ -107,6 +107,14 @@ func (repo *JobRepository) CreateAsyncJob(ctx context.Context, userId string) (s
 	}
 
 	return created.ID, nil
+}
+
+func (repo *JobRepository) CreateAsyncJob(ctx context.Context, userId string) (string, error) {
+	return repo.CreateJob(ctx, userId, JobModAsync)
+}
+
+func (repo *JobRepository) CreateSyncJob(ctx context.Context, userId string) (string, error) {
+	return repo.CreateJob(ctx, userId, JobModSync)
 }
 
 func (repo *JobRepository) UpdateJobStatus(
@@ -145,6 +153,13 @@ func (repo *JobRepository) UpdateJobStatus(
 		   where id = $3
         `
 		break
+	case JobStatusStreaming:
+		query = `	
+	      update jobs.transcription_jobs
+             set status = $1,
+                 streaming_started_at = $2
+	       where id=$3
+        `
 	default:
 		return ErrInvalidJobStatus
 	}

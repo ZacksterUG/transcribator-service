@@ -89,7 +89,8 @@ class App:
             if job_id is not None and job_id != '' and err_message != '':
                 status_data = {
                     'status': 'failed',
-                    'error': err_message
+                    'error': err_message,
+                    'job_id': ''
                 }
 
                 await self.nats_client.publish(f'{self.config.status_topic_prefix}.{job_id}', json.dumps(status_data).encode())
@@ -143,6 +144,15 @@ class App:
             async with self.pool_lock:
                 self.current_active_streams -= 1
 
+            # Публикуем в общую очередь статус завершения на случай, если обрабатывающая реплика упала, чтобы другая смогла завершить
+            data_status_finished = {
+                'job_id': job_id,
+                'status': 'finished',
+                'error': None
+            }
+
+            await self.nats_client.publish(f'{self.config.status_topic_prefix}', json.dumps(data_status_finished).encode())
+
             if on_finish_cb is not None:
                 on_finish_cb()
         last_message_date = datetime.now()
@@ -170,11 +180,22 @@ class App:
                     await finish()
 
                     data_status_finished = {
+                        'job_id': job_id,
                         'status': 'finished',
                         'error': None
                     }
 
                     await self.nats_client.publish(f'{self.config.status_topic_prefix}.{job_id}', json.dumps(data_status_finished).encode())
+                    return
+
+                if data_json.get('check_status'):
+                    data_status_check = {
+                        'status': 'alive',
+                        'job_id': job_id,
+                        'error': None
+                    }
+
+                    await self.nats_client.publish(f'{self.config.status_topic_prefix}.{job_id}', json.dumps(data_status_check).encode())
                     return
 
                 audio_b64 = data_json.get('bytes')
@@ -230,7 +251,8 @@ class App:
 
         ready_json_data = {
             'status': 'ready',
-            'error': None
+            'error': None,
+            'job_id': job_id,
         }
 
         await self.nats_client.publish(f'{self.config.status_topic_prefix}.{job_id}', json.dumps(ready_json_data).encode())
