@@ -139,7 +139,7 @@ services:
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DB=${ASYNC_REDIS_DB}
+      - REDIS_DB=${SYNC_REDIS_DB}
       - NATS_SERVERS=${NATS_SERVERS}
       - MAIN_TOPIC=${SYNC_MAIN_TOPIC}
       - MODEL_TOKENS=${SYNC_MODEL_TOKENS}
@@ -156,6 +156,49 @@ services:
       - MODEL_RULE3_MIN_UTTERANCE_LENGTH=${SYNC_MODEL_RULE3_MIN_UTTERANCE_LENGTH}
       - MAX_ACTIVE_STREAMS=${SYNC_MAX_ACTIVE_STREAMS}
       - JOB_ACTIVE_TIMEOUT=${SYNC_JOB_ACTIVE_TIMEOUT}
+    networks:
+      - transcription-net
+
+  api-gateway:
+    container_name: api-gateway
+    build:
+      context: ./api_gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-10000}:${GATEWAY_PORT:-10000}"
+    depends_on:
+      - db
+      - nats
+      - redis
+      - minio
+      - keycloak
+    restart: unless-stopped
+    environment:
+      GATEWAY_PORT: ${GATEWAY_PORT:-10000}
+      AUTH_TYPE: ${AUTH_TYPE:-keycloak}
+      SERVICE_TOKENS: ${SERVICE_TOKENS:-}
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080}
+      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-master}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-api-gateway}
+      KEYCLOAK_VERIFY_SSL: ${KEYCLOAK_VERIFY_SSL:-true}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      POSTGRESQL_HOST: ${POSTGRESQL_HOST:-db}
+      POSTGRESQL_PORT: ${POSTGRESQL_PORT:-5432}
+      POSTGRESQL_USER: ${POSTGRESQL_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD}
+      POSTGRESQL_DB: ${POSTGRESQL_DB:-transcription_db}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${GATEWAY_REDIS_DB:-1}
+      NATS_SERVER: ${NATS_SERVER:-nats://nats:4222}
+      ASYNC_REQUEST_TOPIC: ${REQUEST_TOPIC:-transcriber.async.request}
+      ASYNC_RESPONSE_TOPIC: ${RESPONSE_TOPIC:-transcriber.async.response}
+      MINIO_URL: ${MINIO_URL:-http://minio-storage:9000}
+      MINIO_USER: ${MINIO_USER}
+      MINIO_PASSWORD: ${MINIO_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
     networks:
       - transcription-net
 

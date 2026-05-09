@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/nats-io/nats.go/jetstream"
 	"log"
@@ -156,6 +157,59 @@ func (agi *GatewayInstance) HandleAsyncResponses() func(jetstream.Msg) {
 			return
 		}
 	}
+}
+
+// GetRedisCacheBytes - Получение из кэша байты
+//
+// ctx - контекст приложения
+//
+// key - ключ в кэше Redis
+//
+// ttl - время жизни кэша
+//
+// alt - альтернативная функция получения данных
+//
+// Возвращает массив байтов, получено ли значение из кэша (true) или функцией (false) и ошибку
+func (appCtx *Context) GetRedisCacheBytes(
+	ctx context.Context,
+	key string,
+	ttl time.Duration,
+	alt func() ([]byte, error),
+) ([]byte, bool, error) {
+	if ttl <= 0 {
+		return nil, false, errors.New("invalid ttl param provided")
+	}
+
+	if len(key) == 0 {
+		return nil, false, errors.New("zero length key provided")
+	}
+
+	redisClient := appCtx.Redis
+
+	fileBytes, err := redisClient.Get(ctx, key).Bytes()
+
+	if err == nil {
+		return fileBytes, true, nil
+	}
+
+	fileBytes, err = alt()
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		err = redisClient.Set(ctx, key, fileBytes, ttl).Err()
+
+		if err != nil {
+			appCtx.Logger.Printf("Could not cache value of the key %s: %v", key, err)
+		}
+	}()
+
+	return fileBytes, false, nil
 }
 
 // Метод для обработки сообщения о завершении синхронного запроса

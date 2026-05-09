@@ -1,16 +1,22 @@
 package async
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"net/http"
+	"time"
 	"transcriber-api-gateway/src/database"
 	"transcriber-api-gateway/src/gateway"
 	"transcriber-api-gateway/src/gateway/endpoints"
+	"transcriber-api-gateway/src/minio"
 )
+
+const asyncJobResultCacheTTL = 24 * time.Hour
 
 func RegisterAsyncEndpoints(ctx *gateway.Context) {
 	authHandler := ctx.AuthHandler
@@ -42,9 +48,12 @@ func GetJob(apiCtx *gateway.Context) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jobRepo := apiCtx.DatabaseContext.JobRepository
 		storage := apiCtx.Storage
+		logger := apiCtx.Logger
+		redis := apiCtx.Redis
 
 		jobID := c.Param("job_id")
-
+		cacheRedisKey := "sync-job" + ":" + jobID + "_cache"
+		needDownload := c.Query("download") == "true"
 		err := validateJobId(jobID)
 
 		if err != nil {
@@ -52,27 +61,20 @@ func GetJob(apiCtx *gateway.Context) gin.HandlerFunc {
 			return
 		}
 
-		jobRow, err := jobRepo.GetJobById(c, jobID)
-
-		if errors.Is(err, database.ErrRowDoesNotExists) {
-			endpoints.SendErrorMessage(c, http.StatusNotFound, err.Error())
-
+		fileBytes, err := getCachedJobResult(c.Request.Context(), cacheRedisKey, redis)
+		if err == nil {
+			sendDataWithDownload(c, fileBytes, needDownload)
+			logger.Println(fmt.Sprintf("Result from job %s was retrieved from cache", jobID))
 			return
 		}
 
-		if err != nil {
-			endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
+		jobRow, ok := getJobRowData(c, jobRepo, jobID)
+
+		if !ok {
 			return
 		}
 
-		jobStatus := jobRow.Status
-
-		if jobRow.Mode != database.JobModAsync {
-			endpoints.SendErrorMessage(c, http.StatusNotFound, "Job is not found with provided ID")
-			return
-		}
-
-		switch jobStatus {
+		switch jobRow.Status {
 		case database.JobStatusPending:
 			c.JSON(http.StatusOK, gin.H{
 				"job_id": jobID,
@@ -96,60 +98,109 @@ func GetJob(apiCtx *gateway.Context) gin.HandlerFunc {
 			})
 			return
 		case database.JobStatusFinished:
-			needDownload := c.Query("download") == "true"
-
-			exists, err := storage.FolderExists(c, jobID)
+			fileBytes, err = getJobResultFromStorage(c.Request.Context(), storage, jobID)
 
 			if err != nil {
 				endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-			if !exists {
-				endpoints.SendErrorMessage(c, http.StatusInternalServerError, "Result for job is not found with provided job ID")
-				return
-			}
-
-			resultDir := jobID + "/result.json"
-			exists, err = storage.Exists(c, resultDir)
-
-			if err != nil {
-				endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-			if !exists {
-				endpoints.SendErrorMessage(c, http.StatusInternalServerError, "Result for job is not found with provided job ID")
-				return
-			}
-
-			fileBytes, err := storage.GetBytes(c, resultDir)
-
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-
-			if needDownload {
-				c.Header("Content-Disposition", "attachment")
-				c.Data(http.StatusOK, "application/octet-stream", fileBytes)
 
 				return
 			}
 
-			// Иначе отправляем json
-			var data gin.H
-			err = json.Unmarshal(fileBytes, &data)
-
-			if err != nil {
-				endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-			c.JSON(http.StatusOK, data)
-			return
+			go setCachedJobResult(apiCtx, cacheRedisKey, asyncJobResultCacheTTL, fileBytes)
 		}
+
+		sendDataWithDownload(c, fileBytes, needDownload)
 	}
+}
+
+func getCachedJobResult(ctx context.Context, jobResultCacheKey string, redis *redis.Client) ([]byte, error) {
+	rgCtx, rgCtxCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer rgCtxCancel()
+	jobCachedValue := redis.Get(rgCtx, jobResultCacheKey)
+
+	return jobCachedValue.Bytes()
+}
+
+func setCachedJobResult(apiCtx *gateway.Context, jobResultCacheKey string, ttlSeconds time.Duration, value []byte) {
+	rgCtx, rgCtxCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer rgCtxCancel()
+
+	jobCachedValue := apiCtx.Redis.Set(rgCtx, jobResultCacheKey, value, ttlSeconds)
+
+	if err := jobCachedValue.Err(); err != nil {
+		apiCtx.Logger.Printf("error caching key '%s': %v", jobResultCacheKey, err)
+	}
+}
+
+func getJobResultFromStorage(c context.Context, storage *minio.MinIOClient, jobID string) ([]byte, error) {
+	exists, err := storage.FolderExists(c, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.New("result for job is not found with provided job ID")
+	}
+
+	resultDir := jobID + "/result.json"
+	exists, err = storage.Exists(c, resultDir)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, errors.New("result for job is not found with provided job ID")
+	}
+
+	fileBytes, err := storage.GetBytes(c, resultDir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return fileBytes, nil
+}
+
+func getJobRowData(c *gin.Context, jobRepo *database.JobRepository, jobID string) (*database.JobModel, bool) {
+	jobRow, err := jobRepo.GetJobById(c.Request.Context(), jobID)
+
+	if errors.Is(err, database.ErrRowDoesNotExists) {
+		endpoints.SendErrorMessage(c, http.StatusNotFound, err.Error())
+
+		return nil, false
+	}
+
+	if err != nil {
+		endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
+
+		return nil, false
+	}
+
+	if jobRow.Mode != database.JobModAsync {
+		endpoints.SendErrorMessage(c, http.StatusNotFound, "Job is not found with provided ID")
+
+		return nil, false
+	}
+
+	return jobRow, true
+}
+
+func sendDataWithDownload(c *gin.Context, dataBytes []byte, needDownload bool) {
+	if needDownload {
+		c.Header("Content-Disposition", "attachment")
+		c.Data(http.StatusOK, "application/octet-stream", dataBytes)
+
+		return
+	}
+
+	var data gin.H
+	err := json.Unmarshal(dataBytes, &data)
+
+	if err != nil {
+		endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
 }
 
 func PostJob(apiCtx *gateway.Context) gin.HandlerFunc {

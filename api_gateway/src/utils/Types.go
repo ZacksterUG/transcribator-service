@@ -19,6 +19,7 @@ type TranscriptionResult struct {
 }
 
 type SyncResponse struct {
-	ErrorMessage *string              `json:"error"`
+	ErrorMessage *string              `json:"message"`
 	Result       *TranscriptionResult `json:"result"`
+	Error        *bool                `json:"error"`
 }

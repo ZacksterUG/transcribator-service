@@ -17,6 +17,7 @@ const ContextKeyUserID = "auth_user_id"
 type KeycloakMiddlewareBuilder struct {
 	config    keycloak_middleware.KeyCloakConfig
 	serverURL string // оригинальный URL с протоколом
+	issuerURL string
 	logger    interfaces.Logger
 }
 
@@ -40,6 +41,7 @@ func NewKeycloakMiddlewareBuilder(config KeycloakConfig) *KeycloakMiddlewareBuil
 			ClientSecret: config.ClientSecret,
 		},
 		serverURL: config.ServerURL,
+		issuerURL: config.IssuerURL,
 		logger:    logger,
 	}
 }
@@ -50,6 +52,7 @@ func (b *KeycloakMiddlewareBuilder) RequireKeycloakAuth() gin.HandlerFunc {
 		// Создаем клиент с логгером и полным URL
 		client := NewKeycloakClient(KeycloakConfig{
 			ServerURL:    b.serverURL,
+			IssuerURL:    b.issuerURL,
 			Realm:        b.config.Realm,
 			ClientID:     b.config.ClientID,
 			ClientSecret: b.config.ClientSecret,

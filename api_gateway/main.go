@@ -31,7 +31,7 @@ func getEnv(key, defaultValue string) string {
 
 func getEnvBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
-		if b, _ := parseBool(key, value); b {
+		if b, err := parseBool(key, value); err == nil {
 			return b
 		}
 	}
@@ -190,10 +190,12 @@ func main() {
 
 	case authorization.AuthTypeKeycloak:
 		authConfig.KeycloakConfig = &authorization.KeycloakConfig{
-			ServerURL: getEnv("KEYCLOAK_SERVER_URL", "http://keycloak:8080"),
-			Realm:     getEnv("KEYCLOAK_REALM", "master"),
-			ClientID:  getEnv("KEYCLOAK_CLIENT_ID", "api-gateway"),
-			VerifySSL: getEnvBool("KEYCLOAK_VERIFY_SSL", true),
+			ServerURL:    getEnv("KEYCLOAK_SERVER_URL", "http://keycloak:8080"),
+			IssuerURL:    getEnv("KEYCLOAK_ISSUER_URL", ""),
+			Realm:        getEnv("KEYCLOAK_REALM", "master"),
+			ClientID:     getEnv("KEYCLOAK_CLIENT_ID", "api-gateway"),
+			ClientSecret: getEnv("KEYCLOAK_CLIENT_SECRET", ""),
+			VerifySSL:    getEnvBool("KEYCLOAK_VERIFY_SSL", true),
 		}
 	}
 

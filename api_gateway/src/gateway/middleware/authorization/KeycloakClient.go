@@ -13,6 +13,7 @@ import (
 // KeycloakConfig конфигурация для Keycloak
 type KeycloakConfig struct {
 	ServerURL    string
+	IssuerURL    string
 	Realm        string
 	ClientID     string
 	ClientSecret string
@@ -67,11 +68,16 @@ func NewKeycloakClient(config KeycloakConfig) *KeycloakClient {
 		logger = interfaces.NewStdLogger(nil)
 	}
 
+	issuerURL := strings.TrimSuffix(config.IssuerURL, "/")
+	if issuerURL == "" {
+		issuerURL = fmt.Sprintf("%s/realms/%s", strings.TrimSuffix(config.ServerURL, "/"), config.Realm)
+	}
+
 	return &KeycloakClient{
 		client:    client,
 		config:    config,
 		logger:    logger,
-		issuerURL: fmt.Sprintf("%s/realms/%s", strings.TrimSuffix(config.ServerURL, "/"), config.Realm),
+		issuerURL: issuerURL,
 	}
 }
 
