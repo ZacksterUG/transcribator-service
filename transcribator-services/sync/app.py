@@ -152,6 +152,7 @@ class App:
             }
 
             await self.nats_client.publish(f'{self.config.status_topic_prefix}', json.dumps(data_status_finished).encode())
+            await self.nats_client.publish(f'{self.config.status_topic_prefix}.{job_id}', json.dumps(data_status_finished).encode())
 
             if on_finish_cb is not None:
                 on_finish_cb()
