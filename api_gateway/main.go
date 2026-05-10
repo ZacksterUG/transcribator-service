@@ -6,20 +6,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"transcriber-api-gateway/src/database"
-	"transcriber-api-gateway/src/gateway/endpoints"
-	"transcriber-api-gateway/src/gateway/endpoints/async"
-	"transcriber-api-gateway/src/gateway/endpoints/sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 
+	"transcriber-api-gateway/src/database"
 	"transcriber-api-gateway/src/gateway"
+	"transcriber-api-gateway/src/gateway/endpoints"
+	"transcriber-api-gateway/src/gateway/endpoints/async"
+	"transcriber-api-gateway/src/gateway/endpoints/sync"
 	"transcriber-api-gateway/src/gateway/interfaces"
 	"transcriber-api-gateway/src/gateway/middleware/authorization"
 	"transcriber-api-gateway/src/minio"
 	"transcriber-api-gateway/src/nats"
+	"transcriber-api-gateway/src/webhook"
 )
 
 func getEnv(key, defaultValue string) string {
@@ -206,11 +207,15 @@ func main() {
 	}
 
 	jobRepo := database.NewJobRepository(db, logger)
+	webhookRepo := database.NewWebhookRepository(db)
 
 	dbContext := &database.DatabaseContext{
-		PoolDatabase:  db,
-		JobRepository: jobRepo,
+		PoolDatabase:      db,
+		JobRepository:     jobRepo,
+		WebhookRepository: webhookRepo,
 	}
+
+	webhookSender := webhook.NewWebhookSender(logger)
 
 	gatewayApp := gateway.Gateway(
 		ctx,
@@ -223,6 +228,7 @@ func main() {
 		},
 		dbContext,
 		nats,
+		webhookSender,
 	)
 
 	gatewayApp.Setup(InitiateHandlers())

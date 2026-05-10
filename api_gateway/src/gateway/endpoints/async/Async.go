@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"net/http"
-	"time"
+
 	"transcriber-api-gateway/src/database"
 	"transcriber-api-gateway/src/gateway"
 	"transcriber-api-gateway/src/gateway/endpoints"
@@ -184,6 +188,73 @@ func getJobRowData(c *gin.Context, jobRepo *database.JobRepository, jobID string
 	return jobRow, true
 }
 
+func validateWebhookParams(c *gin.Context, logger *log.Logger) error {
+	webhookURL := c.PostForm("webhook_url")
+	method := c.PostForm("webhook_method")
+	headers := c.PostForm("webhook_headers")
+
+	hasWebhookData := webhookURL != "" || method != "" || headers != ""
+
+	if hasWebhookData && webhookURL == "" {
+		err := errors.New("webhook_url is required when webhook_method or webhook_headers are provided")
+		logger.Printf("Validation error: %v", err)
+		return err
+	}
+
+	if webhookURL == "" {
+		return nil
+	}
+
+	if _, err := url.ParseRequestURI(webhookURL); err != nil {
+		err := errors.New("invalid webhook_url: must be a valid URL")
+		logger.Printf("Validation error: %v", err)
+		return err
+	}
+
+	effectiveMethod := c.DefaultPostForm("webhook_method", "POST")
+	if effectiveMethod != "POST" && effectiveMethod != "PUT" {
+		err := errors.New("invalid webhook_method: must be POST or PUT")
+		logger.Printf("Validation error: %v", err)
+		return err
+	}
+
+	if headers != "" {
+		var dummy map[string]interface{}
+		if err := json.Unmarshal([]byte(headers), &dummy); err != nil {
+			err := errors.New("invalid webhook_headers: must be valid JSON")
+			logger.Printf("Validation error: %v", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func saveWebhookConfig(c *gin.Context, apiCtx *gateway.Context, jobId string) error {
+	webhookURL := c.PostForm("webhook_url")
+	if webhookURL == "" {
+		return nil
+	}
+
+	method := c.DefaultPostForm("webhook_method", "POST")
+	headers := c.DefaultPostForm("webhook_headers", "{}")
+
+	_, err := apiCtx.DatabaseContext.WebhookRepository.CreateWebhookConfig(
+		c.Request.Context(),
+		jobId,
+		webhookURL,
+		method,
+		headers,
+	)
+
+	if err != nil {
+		apiCtx.Logger.Printf("Error creating webhook config for job %s: %v", jobId, err)
+		return err
+	}
+
+	return nil
+}
+
 func sendDataWithDownload(c *gin.Context, dataBytes []byte, needDownload bool) {
 	if needDownload {
 		c.Header("Content-Disposition", "attachment")
@@ -244,9 +315,19 @@ func PostJob(apiCtx *gateway.Context) gin.HandlerFunc {
 			return
 		}
 
+		if err := validateWebhookParams(c, apiCtx.Logger); err != nil {
+			endpoints.SendErrorMessage(c, http.StatusBadRequest, err.Error())
+			return
+		}
+
 		jobId, err := apiCtx.DatabaseContext.JobRepository.CreateAsyncJob(c, userId)
 
 		if err != nil {
+			endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if err := saveWebhookConfig(c, apiCtx, jobId); err != nil {
 			endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -266,6 +347,7 @@ func PostJob(apiCtx *gateway.Context) gin.HandlerFunc {
 
 		if err != nil {
 			endpoints.SendErrorMessage(c, http.StatusInternalServerError, err.Error())
+			return
 		}
 
 		apiCtx.Logger.Println(fmt.Sprintf("Job created with ID: %s, %s", jobId, dir))
@@ -275,6 +357,5 @@ func PostJob(apiCtx *gateway.Context) gin.HandlerFunc {
 			"status": database.JobStatusPending,
 			"error":  false,
 		})
-
 	}
 }

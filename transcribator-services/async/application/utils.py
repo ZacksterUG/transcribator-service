@@ -232,7 +232,9 @@ def request_from_binary(data: bytes) -> Request:
 
     # Валидация created_at
     try:
-        created_at = datetime.datetime.fromisoformat(created_at_str)
+        # Поддержка формата с суффиксом 'Z' (UTC) для Python < 3.11
+        normalized = created_at_str.replace('Z', '+00:00')
+        created_at = datetime.datetime.fromisoformat(normalized)
     except ValueError as e:
         raise ValueError(f"Invalid created_at format: {created_at_str}") from e
 

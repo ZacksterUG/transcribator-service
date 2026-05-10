@@ -221,7 +221,18 @@ services:
     networks:
       - transcription-net
 
-        
+  tg-webhook-test:
+    container_name: tg-webhook-test
+    build:
+      context: ./tg_webhook_test
+      dockerfile: Dockerfile
+    ports:
+      - "10001:10001"
+    environment:
+      TG_BOT_TOKEN: ${TG_BOT_TOKEN}
+    networks:
+      - transcription-net
+
 networks:
   transcription-net:
     driver: bridge

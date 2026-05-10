@@ -3,22 +3,23 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/nats-io/nats.go/jetstream"
 	"log"
 	"time"
-	"transcriber-api-gateway/src/database"
-	"transcriber-api-gateway/src/minio"
-	"transcriber-api-gateway/src/nats"
-	"transcriber-api-gateway/src/utils"
+
+	natslib "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/bsm/redislock"
 	"github.com/gin-gonic/gin"
-	natslib "github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 
+	"transcriber-api-gateway/src/database"
 	"transcriber-api-gateway/src/gateway/middleware/authorization"
+	"transcriber-api-gateway/src/minio"
+	"transcriber-api-gateway/src/nats"
+	"transcriber-api-gateway/src/utils"
+	"transcriber-api-gateway/src/webhook"
 )
 
 type GatewayInstance struct {
@@ -31,6 +32,7 @@ type GatewayInstance struct {
 	redis           *redis.Client
 	databaseContext *database.DatabaseContext
 	natsContext     *nats.NatsContext
+	webhookSender   *webhook.WebhookSender
 }
 
 type GatewayConfig struct {
@@ -45,6 +47,7 @@ type Context struct {
 	Redis           *redis.Client
 	DatabaseContext *database.DatabaseContext
 	NatsContext     *nats.NatsContext
+	WebhookSender   *webhook.WebhookSender
 }
 
 func Gateway(
@@ -56,6 +59,7 @@ func Gateway(
 	config GatewayConfig,
 	databaseContext *database.DatabaseContext,
 	natsContext *nats.NatsContext,
+	webhookSender *webhook.WebhookSender,
 ) *GatewayInstance {
 	g := gin.Default()
 
@@ -69,6 +73,7 @@ func Gateway(
 		redis:           redisClient,
 		databaseContext: databaseContext,
 		natsContext:     natsContext,
+		webhookSender:   webhookSender,
 	}
 
 	return &agi
@@ -94,6 +99,7 @@ func (agi *GatewayInstance) Setup(handlers []RegisterHandler) {
 		Redis:           agi.redis,
 		DatabaseContext: agi.databaseContext,
 		NatsContext:     agi.natsContext,
+		WebhookSender:   agi.webhookSender,
 	}
 
 	for _, handler := range handlers {
@@ -156,60 +162,89 @@ func (agi *GatewayInstance) HandleAsyncResponses() func(jetstream.Msg) {
 			logger.Printf("Error updating job status: %v", err)
 			return
 		}
+
+		if status == database.JobStatusFinished || status == database.JobStatusFailed {
+			go func() {
+				agi.sendWebhookForJob(jobId, status, completedAtStr, errorMessage)
+			}()
+		}
 	}
 }
 
-// GetRedisCacheBytes - Получение из кэша байты
-//
-// ctx - контекст приложения
-//
-// key - ключ в кэше Redis
-//
-// ttl - время жизни кэша
-//
-// alt - альтернативная функция получения данных
-//
-// Возвращает массив байтов, получено ли значение из кэша (true) или функцией (false) и ошибку
-func (appCtx *Context) GetRedisCacheBytes(
-	ctx context.Context,
-	key string,
-	ttl time.Duration,
-	alt func() ([]byte, error),
-) ([]byte, bool, error) {
-	if ttl <= 0 {
-		return nil, false, errors.New("invalid ttl param provided")
+func (agi *GatewayInstance) sendWebhookForJob(jobID, status, completedAt, errorMessage string) {
+	webhookConfig, err := agi.databaseContext.WebhookRepository.GetWebhookConfigByJobID(agi.ctx, jobID)
+	if err != nil {
+		agi.logger.Printf("No webhook config found for job %s", jobID)
+		return
 	}
 
-	if len(key) == 0 {
-		return nil, false, errors.New("zero length key provided")
+	var headers map[string]string
+	if webhookConfig.Headers != "" {
+		if err := json.Unmarshal([]byte(webhookConfig.Headers), &headers); err != nil {
+			agi.logger.Printf("Error parsing webhook headers for job %s: %v", jobID, err)
+			headers = nil
+		}
 	}
 
-	redisClient := appCtx.Redis
+	var resultData interface{}
 
-	fileBytes, err := redisClient.Get(ctx, key).Bytes()
+	if status == database.JobStatusFinished {
+		resultPath := jobID + "/result.json"
 
-	if err == nil {
-		return fileBytes, true, nil
+		var fileBytes []byte
+		exists := false
+		var err error
+
+		for i := 0; i < 5; i++ {
+			exists, err = agi.storage.Exists(agi.ctx, resultPath)
+			if err == nil && exists {
+				break
+			}
+			agi.logger.Printf("Waiting for result file... attempt %d/5", i+1)
+			time.Sleep(2 * time.Second)
+		}
+
+		if exists && err == nil {
+			fileBytes, err = agi.storage.GetBytes(agi.ctx, resultPath)
+			if err == nil {
+				var jsonData map[string]interface{}
+				if json.Unmarshal(fileBytes, &jsonData) == nil {
+					resultData = jsonData
+				}
+			} else {
+				agi.logger.Printf("Error downloading file for webhook result for job %s: %v", jobID, err)
+			}
+		} else {
+			status = database.JobStatusFailed
+			errorMessage = "Result file not found in storage after 5 attempts"
+			agi.logger.Printf("Result file not found for job %s after 5 attempts", jobID)
+		}
 	}
 
-	fileBytes, err = alt()
+	payload := webhook.WebhookPayload{
+		JobID:       jobID,
+		Status:      status,
+		CompletedAt: completedAt,
+		Result:      resultData,
+		Error:       errorMessage,
+	}
+
+	method := "POST"
+	if webhookConfig.Method != "" {
+		method = webhookConfig.Method
+	}
+
+	err = agi.webhookSender.SendWebhook(
+		agi.ctx,
+		webhookConfig.URL,
+		method,
+		headers,
+		payload,
+	)
 
 	if err != nil {
-		return nil, false, err
+		agi.logger.Printf("Error sending webhook for job %s: %v", jobID, err)
 	}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		err = redisClient.Set(ctx, key, fileBytes, ttl).Err()
-
-		if err != nil {
-			appCtx.Logger.Printf("Could not cache value of the key %s: %v", key, err)
-		}
-	}()
-
-	return fileBytes, false, nil
 }
 
 // Метод для обработки сообщения о завершении синхронного запроса
