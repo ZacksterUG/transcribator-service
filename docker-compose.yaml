@@ -160,12 +160,10 @@ services:
       - transcription-net
 
   api-gateway:
-    container_name: api-gateway
     build:
       context: ./api_gateway
       dockerfile: Dockerfile
-    ports:
-      - "${GATEWAY_PORT:-10000}:${GATEWAY_PORT:-10000}"
+    ports: ["10000-10004:10000"]
     depends_on:
       - db
       - nats
@@ -227,7 +225,7 @@ services:
       context: ./tg_webhook_test
       dockerfile: Dockerfile
     ports:
-      - "10001:10001"
+      - "10050:10050"
     environment:
       TG_BOT_TOKEN: ${TG_BOT_TOKEN}
     networks:

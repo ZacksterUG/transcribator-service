@@ -1,162 +1,229 @@
+# main.py
 import os
 import json
 import asyncio
 import logging
-from pathlib import Path
-from functools import wraps
 import threading
+from pathlib import Path
+from io import BytesIO
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Header, HTTPException, Request
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.request import HTTPXRequest
 
-logging.basicConfig(level=logging.INFO)
+# ─────────────────────────────────────────────────────────────
+# Настройка логирования
+# ─────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# ─────────────────────────────────────────────────────────────
+# Загрузка конфигурации
+# ─────────────────────────────────────────────────────────────
 load_dotenv()
 
-APP_TOKEN = "hardcoded_secret_token_for_webhook_auth"
+APP_TOKEN = os.getenv("APP_TOKEN", "hardcoded_secret_token_for_webhook_auth")
 USERS_DB_FILE = Path("users.txt")
-app = Flask(__name__)
-
 bot_token = os.getenv("TG_BOT_TOKEN")
 if not bot_token:
     raise ValueError("TG_BOT_TOKEN not set in .env")
 
-application = Application.builder().token(bot_token).build()
-
-event_loop = asyncio.new_event_loop()
-asyncio.set_event_loop(event_loop)
+# ─────────────────────────────────────────────────────────────
+# Bot в отдельном потоке
+# ─────────────────────────────────────────────────────────────
+bot_app: Application = None  # type: ignore
+bot_loop = None
 
 
 def run_bot():
-    event_loop.run_until_complete(main_async())
+    global bot_app, bot_loop
+
+    request_config = HTTPXRequest(
+        connect_timeout=10,
+        read_timeout=30,
+        write_timeout=30,
+        pool_timeout=20,
+    )
+
+    bot_app = Application.builder() \
+        .token(bot_token) \
+        .request(request_config) \
+        .build()
+
+    bot_app.add_handler(CommandHandler("start", start_command))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    bot_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(bot_loop)
+
+    async def main():
+        await bot_app.initialize()
+        await bot_app.start()
+        await bot_app.updater.start_polling(drop_pending_updates=True)
+        logger.info("Bot polling started")
+
+    try:
+        bot_loop.run_until_complete(main())
+        bot_loop.run_forever()
+    finally:
+        bot_loop.close()
 
 
-async def main_async():
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True)
-    while True:
-        await asyncio.sleep(3600)
+# Запуск бота в отдельном потоке
+bot_thread = threading.Thread(target=run_bot, daemon=True)
+bot_thread.start()
 
-
-def auth_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = request.headers.get("X-App-Token")
-        if token != APP_TOKEN:
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
-    return decorated
-
-
-def load_users():
+# ─────────────────────────────────────────────────────────────
+# Работа с пользователями
+# ─────────────────────────────────────────────────────────────
+def load_users() -> set[str]:
     if not USERS_DB_FILE.exists():
         return set()
-    with open(USERS_DB_FILE, "r") as f:
-        return set(line.strip() for line in f if line.strip())
+    with open(USERS_DB_FILE, "r", encoding="utf-8") as f:
+        return {line.strip() for line in f if line.strip()}
 
 
-def save_user(user_id):
+def save_user(user_id: int) -> None:
     users = load_users()
     users.add(str(user_id))
-    with open(USERS_DB_FILE, "w") as f:
+    with open(USERS_DB_FILE, "w", encoding="utf-8") as f:
         for uid in sorted(users):
             f.write(f"{uid}\n")
 
 
-def is_registered(user_id):
+def is_registered(user_id: int) -> bool:
     return str(user_id) in load_users()
 
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if is_registered(update.effective_user.id):
-        await update.message.reply_text("Вы уже зарегистрированы!")
-    else:
-        keyboard = [[KeyboardButton("Зарегистрироваться")]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+# ─────────────────────────────────────────────────────────────
+# Обработчики команд бота
+# ─────────────────────────────────────────────────────────────
+async def start_command(update: Update, context) -> None:
+    try:
+        user_id = update.effective_user.id
+        logger.info(f"start_command called by user {user_id}")
+        if is_registered(user_id):
+            await update.message.reply_text("Вы уже зарегистрированы! ✅")
+        else:
+            keyboard = [[KeyboardButton("Зарегистрироваться")]]
+            reply_markup = ReplyKeyboardMarkup(
+                keyboard,
+                resize_keyboard=True,
+                one_time_keyboard=True
+            )
+            await update.message.reply_text(
+                "Нажмите кнопку для регистрации:",
+                reply_markup=reply_markup
+            )
+    except Exception as e:
+        logger.error(f"Error in start_command: {e}")
+
+
+async def register_callback(update: Update, context) -> None:
+    try:
+        user_id = update.effective_user.id
+        save_user(user_id)
         await update.message.reply_text(
-            "Нажмите кнопку для регистрации:",
-            reply_markup=reply_markup
+            f"Вы зарегистрированы! Ваш ID: `{user_id}`",
+            parse_mode="Markdown"
         )
+    except Exception as e:
+        logger.error(f"Error in register_callback: {e}")
 
 
-async def register_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    save_user(user_id)
-    await update.message.reply_text(f"Вы зарегистрированы! Ваш ID: {user_id}")
+async def handle_message(update: Update, context) -> None:
+    try:
+        if update.message and update.message.text == "Зарегистрироваться":
+            await register_callback(update, context)
+        elif update.message:
+            await update.message.reply_text("Используйте /start для начала работы")
+    except Exception as e:
+        logger.error(f"Error in handle_message: {e}")
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.text == "Зарегистрироваться":
-        await register_callback(update, context)
-    else:
-        await update.message.reply_text("Используйте /start для начала работы")
+# ─────────────────────────────────────────────────────────────
+# FastAPI приложение
+# ─────────────────────────────────────────────────────────────
+app = FastAPI()
 
 
-@app.route("/tg-webhook", methods=["POST"])
-async def tg_webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    await application.process_update(update)
-    return "ok"
+# ─────────────────────────────────────────────────────────────
+# Отправка сообщений в бот (thread-safe)
+# ─────────────────────────────────────────────────────────────
+def send_telegram_message(chat_id: int, text: str, document_bytes: bytes = None):
+    if bot_app is None or bot_app.bot is None:
+        logger.error("Bot app is not initialized")
+        return
+
+    async def _send():
+        await bot_app.bot.send_message(chat_id=chat_id, text=text)
+        if document_bytes:
+            file_obj = BytesIO(document_bytes)
+            file_obj.name = "result.json"
+            await bot_app.bot.send_document(chat_id=chat_id, document=file_obj)
+
+    future = asyncio.run_coroutine_threadsafe(_send(), bot_loop)
+    future.result(timeout=30)
 
 
-@app.route("/webhook", methods=["POST"])
-@auth_required
-def webhook_handler():
-    data = request.get_json()
-    logger.info(f"Received webhook data: {data}")
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
+# ─────────────────────────────────────────────────────────────
+# Эндпоинты
+# ─────────────────────────────────────────────────────────────
+@app.post("/webhook")
+async def custom_webhook(
+        request: Request,
+        x_app_token: str | None = Header(default=None),
+        x_user_id: str | None = Header(default=None)
+):
+    logger.info(f"Received webhook request, x_user_id={x_user_id}")
 
-    user_id = request.headers.get("X-User-ID")
-    if not user_id:
-        return jsonify({"error": "X-User-ID header is required"}), 400
+    if x_app_token != APP_TOKEN:
+        logger.warning(f"Unauthorized request")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-ID header is required")
+
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
 
     result_data = data.get("result")
-    logger.info(f"Result data: {result_data}")
     if not result_data:
-        return jsonify({"error": "result is required"}), 400
+        raise HTTPException(status_code=400, detail="result field is required")
 
     results = result_data.get("results", [])
     if not results:
-        return jsonify({"error": "No results in data"}), 400
+        raise HTTPException(status_code=400, detail="No results in data")
 
     segments = results[0].get("segments", [])
-    text_parts = [seg.get("text", "") for seg in segments]
+    text_parts = [seg.get("text", "").strip() for seg in segments if seg.get("text")]
     transcription_text = ". ".join(text_parts)
 
     result_json = json.dumps(result_data, ensure_ascii=False, indent=2)
-    result_bytes = result_json.encode("utf-8")
 
-    async def send_result():
-        await application.bot.send_message(
-            chat_id=int(user_id),
-            text=transcription_text if transcription_text else "Результат транскрибации получен."
+    try:
+        logger.info(f"Sending to user {x_user_id}")
+        send_telegram_message(
+            int(x_user_id),
+            transcription_text if transcription_text else "Результат транскрибации получен.",
+            result_json.encode("utf-8")
         )
-        from io import BytesIO
-        file_obj = BytesIO(result_bytes)
-        file_obj.name = "result.json"
-        await application.bot.send_document(
-            chat_id=int(user_id),
-            document=file_obj,
-            filename="result.json"
-        )
+        logger.info(f"📤 Sent result to user {x_user_id}")
+    except Exception as e:
+        logger.error(f"Failed to send: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send Telegram message")
 
-    future = asyncio.run_coroutine_threadsafe(send_result(), event_loop)
-    future.result()
-
-    return jsonify({"status": "sent"})
+    return {"status": "sent"}
 
 
-if __name__ == "__main__":
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
-
-    app.run(host="0.0.0.0", port=10001)
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "bot_running": bot_app is not None}
