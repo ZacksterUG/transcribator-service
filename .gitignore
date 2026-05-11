@@ -65,3 +65,7 @@ temp_dir
 .aider*
 .gigacode
 /models/
+
+/web_app_test_backend/node_modules/**
+/web_app_test/node_modules/**
+node_modules/
