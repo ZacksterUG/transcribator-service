@@ -60,7 +60,8 @@ class App:
             lock = self.redis_db.lock(f'transcriber.sync.{job_id}', blocking=False, timeout=10)
 
             if not lock.acquire(blocking=False):
-                raise RedisJobLocker(f'job with {job_id} is already running')
+                self.logger.info(f'acquired lock for job {job_id} failed, passing')
+                return
 
             handle_message_task: asyncio.Task
 

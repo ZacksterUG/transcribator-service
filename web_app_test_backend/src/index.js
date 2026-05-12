@@ -218,8 +218,15 @@ wss.on('connection', async (ws) => {
     });
 
     gatewayWs.on('message', (data) => {
-      console.log('Received from gateway:', data.toString().substring(0, 200));
-      ws.send(data.toString());
+      const timestamp = new Date().toISOString();
+      const dataStr = data.toString();
+      let textLen = 0;
+      try {
+        const parsed = JSON.parse(dataStr);
+        if (parsed.data?.result?.text) textLen = parsed.data.result.text.length;
+      } catch {}
+      console.log(`[PERF] Gateway TO Backend ts=${timestamp} text_len=${textLen}`);
+      ws.send(dataStr);
     });
 
     gatewayWs.on('error', (error) => {
@@ -240,9 +247,18 @@ wss.on('connection', async (ws) => {
   }
 
   ws.on('message', (data) => {
+    const msgStr = data.toString();
+    let dataSize = 0;
+    try {
+      const parsed = JSON.parse(msgStr);
+      if (parsed.bytes) dataSize = parsed.bytes.length;
+    } catch {}
+    const timestamp = new Date().toISOString();
+    console.log(`[PERF] Client TO Backend ts=${timestamp} size=${dataSize}`);
     if (gatewayWs && gatewayWs.readyState === 1) {
-      console.log('Forwarding to gateway:', data.toString().substring(0, 100));
-      gatewayWs.send(data.toString());
+      const start = Date.now();
+      gatewayWs.send(msgStr);
+      console.log(`[PERF] Backend TO Gateway ts=${timestamp} size=${dataSize} duration=${Date.now() - start}ms`);
     }
   });
 

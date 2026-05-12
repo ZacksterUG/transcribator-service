@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Container, Title, Text, Stack, Card, Group, ThemeIcon, Badge, Button, FileButton, Checkbox, TextInput, Box, Progress, List, Alert } from '@mantine/core';
 import { IconFileMusic, IconUpload, IconBrandTelegram, IconCheck, IconArrowRight, IconArrowLeft, IconPlayerPlay } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
+import { keycloak } from '../config/keycloak';
 
 const STORAGE_KEY = 'transcriber_telegram_id';
 
@@ -37,8 +38,11 @@ export function AsyncPage() {
         formData.append('telegram_user_id', telegramUserId);
       }
       
-      const response = await fetch('http://localhost:3001/api/async/job', {
+      const token = keycloak.instance.token;
+      console.log('Token:', token ? token.substring(0, 50) + '...' : 'no token');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/async/job`, {
         method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData,
       });
       
@@ -254,7 +258,10 @@ function ProgressJob({ jobId }: { jobId: string }) {
       
       try {
         console.log('Checking status for:', jobId);
-        const response = await fetch(`http://localhost:3001/api/async/job/${jobId}`);
+        const token = keycloak.instance.token;
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/async/job/${jobId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
         const data = await response.json();
         console.log('Status response:', data);
         

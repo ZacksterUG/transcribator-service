@@ -2,11 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Container, Title, Text, Stack, Card, Group, ThemeIcon, Badge, Button, Box, Alert, Loader } from '@mantine/core';
 import { IconMicrophone, IconPlayerStop, IconPlayerPlay, IconWaveSawTool, IconApi } from '@tabler/icons-react';
 
-const WS_BACKEND_URL = 'ws://localhost:30011';
+const WS_BACKEND_URL = import.meta.env.VITE_WS_URL + '/ws/sync';
 
 const SAMPLE_RATE = 16000;
-const CHUNK_DURATION = 0.16;
-const CHUNK_SIZE = Math.floor(SAMPLE_RATE * CHUNK_DURATION);
+const CHUNK_SIZE = 1024;
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'ready' | 'recording' | 'finished' | 'error';
 
@@ -20,14 +19,8 @@ export function SyncPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
-  const audioBufferRef = useRef<number[]>([]);
-  const intervalRef = useRef<number | null>(null);
 
   const stopRecording = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect();
       scriptProcessorRef.current = null;
@@ -124,37 +117,30 @@ export function SyncPage() {
 
       const source = audioContext.createMediaStreamSource(stream);
       
-      const scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+      const scriptProcessor = audioContext.createScriptProcessor(CHUNK_SIZE, 1, 1);
       scriptProcessorRef.current = scriptProcessor;
+
+      const sendAudioChunk = (inputData: Float32Array) => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+        
+        const bytes = inputData.buffer;
+        let binary = '';
+        const bytesArray = new Uint8Array(bytes);
+        for (let i = 0; i < bytesArray.length; i++) {
+          binary += String.fromCharCode(bytesArray[i]);
+        }
+        const base64 = btoa(binary);
+        
+        wsRef.current.send(JSON.stringify({ bytes: base64 }));
+      };
 
       scriptProcessor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
-        for (let i = 0; i < inputData.length; i++) {
-          audioBufferRef.current.push(inputData[i]);
-        }
+        sendAudioChunk(inputData);
       };
 
       source.connect(scriptProcessor);
       scriptProcessor.connect(audioContext.destination);
-
-      const sendChunks = () => {
-        if (audioBufferRef.current.length >= CHUNK_SIZE && wsRef.current?.readyState === WebSocket.OPEN) {
-          const chunk = audioBufferRef.current.splice(0, CHUNK_SIZE);
-          const float32Array = new Float32Array(chunk);
-          
-          const bytes = float32Array.buffer;
-          let binary = '';
-          const bytesArray = new Uint8Array(bytes);
-          for (let i = 0; i < bytesArray.length; i++) {
-            binary += String.fromCharCode(bytesArray[i]);
-          }
-          const base64 = btoa(binary);
-          
-          wsRef.current.send(JSON.stringify({ bytes: base64 }));
-        }
-      };
-
-      intervalRef.current = window.setInterval(sendChunks, CHUNK_DURATION * 1000);
 
       setStatus('recording');
 
@@ -298,7 +284,6 @@ export function SyncPage() {
           <Stack gap="xs">
             <Text size="sm"><b>WebSocket URL:</b> {WS_BACKEND_URL}</Text>
             <Text size="sm"><b>Аудио формат:</b> 16kHz, mono, float32</Text>
-            <Text size="sm"><b>Интервал отправки:</b> {CHUNK_DURATION * 1000}ms</Text>
           </Stack>
         </Card>
       </Stack>

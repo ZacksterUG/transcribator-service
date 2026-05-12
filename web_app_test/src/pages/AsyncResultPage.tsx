@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Container, Title, Text, Stack, Card, Group, ThemeIcon, Badge, Button, Box, Loader, Center } from '@mantine/core';
 import { IconCheck, IconCopy, IconAlertCircle } from '@tabler/icons-react';
 import { useParams } from 'react-router-dom';
+import { keycloak } from '../config/keycloak';
 
 interface JobResult {
   job_id: string;
@@ -27,7 +28,10 @@ export function AsyncResultPage() {
   useEffect(() => {
     const fetchResult = async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/async/job/${jobId}`);
+        const token = keycloak.instance.token;
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/async/job/${jobId}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
         
         const data = await response.json();
         console.log('Result data:', data);

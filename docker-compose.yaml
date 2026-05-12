@@ -1,6 +1,25 @@
-version: '3.8'
-
 services:
+
+  nginx-proxy:
+    build:
+      context: ./nginx-proxy
+      dockerfile: Dockerfile
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-proxy/data:/etc/letsencrypt
+      - ./nginx-proxy/www:/var/www/certbot
+    networks:
+      - frontend-network
+      - transcription-net
+      - tg-network
+    depends_on:
+      - web-app-frontend
+      - web-app-backend
+      - api-gateway
+      - keycloak
   minio:
     image: minio/minio:latest
     container_name: minio-storage
@@ -126,7 +145,8 @@ services:
       - transcription-net
 
   transcribator-sync:
-    container_name: transcribator-sync
+    deploy:
+      replicas: 2
     build:
       context: ./transcribator-services/sync
       dockerfile: Dockerfile
@@ -176,8 +196,8 @@ services:
       AUTH_TYPE: ${AUTH_TYPE:-keycloak}
       SERVICE_TOKENS: ${SERVICE_TOKENS:-}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080}
-      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-http://keycloak:8080/realms/dev-realm}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-master}
+      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-dev-realm}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-api-gateway}
       KEYCLOAK_VERIFY_SSL: ${KEYCLOAK_VERIFY_SSL:-true}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
@@ -215,6 +235,12 @@ services:
       KC_DB_USERNAME: ${POSTGRESQL_USER}
       KC_DB_PASSWORD: ${POSTGRESQL_PASSWORD}
       KC_HEALTH_ENABLED: "true"
+      KC_PROXY: edge
+      KC_HOSTNAME_STRATEGY: CUSTOM
+      KC_HOSTNAME: ${APP_DOMAIN}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
     command: start-dev
     depends_on:
       - db
@@ -239,12 +265,14 @@ services:
       context: ./web_app_test
       dockerfile: Dockerfile
       args:
-        VITE_KEYCLOAK_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080}
-        VITE_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-dev-realm}
-        VITE_KEYCLOAK_CLIENT_ID: ${WEB_APP_KEYCLOAK_CLIENT_ID:-transcriber-web-app}
+        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL}
+        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-dev-realm}
+        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-transcriber-web-app}
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
     container_name: web-app-frontend
     ports:
-      - "5173:80"
+      - "85:80"
     depends_on:
       - web-app-backend
     networks:
@@ -257,12 +285,13 @@ services:
     container_name: web-app-backend
     ports:
       - "3001:3001"
+      - "3002:3002"
       - "30011:30011"
     environment:
       NODE_ENV: production
       PORT: 3001
       API_GATEWAY_URL: ${API_GATEWAY_URL}
-      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_URL: ${VITE_KEYCLOAK_URL}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       KEYCLOAK_CLIENT_ID: ${WEB_APP_KEYCLOAK_CLIENT_ID}
       KEYCLOAK_CLIENT_SECRET: ${WEB_APP_KEYCLOAK_CLIENT_SECRET}

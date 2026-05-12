@@ -2,9 +2,9 @@ import Keycloak from 'keycloak-js';
 import type { User } from '../types/User';
 
 export const keycloakConfig = {
-  url: import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080',
-  realm: import.meta.env.VITE_KEYCLOAK_REALM || 'dev-realm',
-  clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'transcriber-web-app',
+  url: import.meta.env.VITE_KEYCLOAK_URL,
+  realm: import.meta.env.VITE_KEYCLOAK_REALM,
+  clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
   redirectUri: window.location.origin,
   publicClient: true,
 };
