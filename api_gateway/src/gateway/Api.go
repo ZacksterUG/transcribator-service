@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"transcriber-api-gateway/src/database"
+	"transcriber-api-gateway/src/gateway/middleware/accessLogging"
 	"transcriber-api-gateway/src/gateway/middleware/authorization"
 	"transcriber-api-gateway/src/minio"
 	"transcriber-api-gateway/src/nats"
@@ -23,16 +24,17 @@ import (
 )
 
 type GatewayInstance struct {
-	ctx             context.Context
-	ginInstance     *gin.Engine
-	cfg             GatewayConfig
-	authorizer      authorization.Authorizer
-	logger          *log.Logger
-	storage         *minio.MinIOClient
-	redis           *redis.Client
-	databaseContext *database.DatabaseContext
-	natsContext     *nats.NatsContext
-	webhookSender   *webhook.WebhookSender
+	ctx                  context.Context
+	ginInstance          *gin.Engine
+	cfg                  GatewayConfig
+	authorizer           authorization.Authorizer
+	logger               *log.Logger
+	storage              *minio.MinIOClient
+	redis                *redis.Client
+	databaseContext      *database.DatabaseContext
+	natsContext          *nats.NatsContext
+	webhookSender        *webhook.WebhookSender
+	accessLogRepository  *database.AccessLogRepository
 }
 
 type GatewayConfig struct {
@@ -60,20 +62,22 @@ func Gateway(
 	databaseContext *database.DatabaseContext,
 	natsContext *nats.NatsContext,
 	webhookSender *webhook.WebhookSender,
+	accessLogRepository *database.AccessLogRepository,
 ) *GatewayInstance {
 	g := gin.Default()
 
 	agi := GatewayInstance{
-		ctx:             ctx,
-		ginInstance:     g,
-		cfg:             config,
-		authorizer:      Auth,
-		logger:          logger,
-		storage:         Storage,
-		redis:           redisClient,
-		databaseContext: databaseContext,
-		natsContext:     natsContext,
-		webhookSender:   webhookSender,
+		ctx:                  ctx,
+		ginInstance:          g,
+		cfg:                  config,
+		authorizer:           Auth,
+		logger:               logger,
+		storage:              Storage,
+		redis:                redisClient,
+		databaseContext:      databaseContext,
+		natsContext:          natsContext,
+		webhookSender:        webhookSender,
+		accessLogRepository: accessLogRepository,
 	}
 
 	return &agi
@@ -90,6 +94,11 @@ func (agi *GatewayInstance) Setup(handlers []RegisterHandler) {
 
 	// Создаем основную группу API
 	apiGroup := agi.ginInstance.Group("/api")
+
+	if agi.accessLogRepository != nil {
+		accessLogMiddleware := accessLogging.NewAccessLoggingMiddleware(agi.accessLogRepository, agi.logger)
+		apiGroup.Use(accessLogMiddleware.Handler("api.access"))
+	}
 
 	context := &Context{
 		Group:           apiGroup,

@@ -208,11 +208,13 @@ func main() {
 
 	jobRepo := database.NewJobRepository(db, logger)
 	webhookRepo := database.NewWebhookRepository(db)
+	accessLogRepo := database.NewAccessLogRepository(db)
 
 	dbContext := &database.DatabaseContext{
-		PoolDatabase:      db,
-		JobRepository:     jobRepo,
-		WebhookRepository: webhookRepo,
+		PoolDatabase:        db,
+		JobRepository:       jobRepo,
+		WebhookRepository:   webhookRepo,
+		AccessLogRepository: accessLogRepo,
 	}
 
 	webhookSender := webhook.NewWebhookSender(logger)
@@ -229,6 +231,7 @@ func main() {
 		dbContext,
 		nats,
 		webhookSender,
+		accessLogRepo,
 	)
 
 	gatewayApp.Setup(InitiateHandlers())
