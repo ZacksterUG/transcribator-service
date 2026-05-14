@@ -56,9 +56,15 @@ func (m *AccessLoggingMiddleware) Handler(action string) gin.HandlerFunc {
 			}
 
 			var tokenIDPtr *string
+			var usernamePtr *string
 			claims := authorization.GetClaimsFromContext(c)
-			if claims != nil && claims.ID != "" {
-				tokenIDPtr = &claims.ID
+			if claims != nil {
+				if claims.ID != "" {
+					tokenIDPtr = &claims.ID
+				}
+				if claims.PreferredUsername != "" {
+					usernamePtr = &claims.PreferredUsername
+				}
 			}
 
 			var statusCodePtr *int
@@ -80,6 +86,7 @@ func (m *AccessLoggingMiddleware) Handler(action string) gin.HandlerFunc {
 				ctx,
 				userIDPtr,
 				tokenIDPtr,
+				usernamePtr,
 				action,
 				ip,
 				userAgentPtr,

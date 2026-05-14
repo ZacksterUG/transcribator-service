@@ -60,16 +60,16 @@ class CrocWhisperModel(IModel):
 
     # ───────── Redis-ключи ─────────
     def _key_tasks(self, job_id: str) -> str:
-        """SET со всеми task_id для job_id: async-jobs:<job_id>:api_tasks"""
-        return f"async-jobs:{job_id}:api_tasks"
+        """SET со всеми task_id для job_id: transcriber:async:<job_id>:tasks"""
+        return f"transcriber:async:{job_id}:tasks"
 
     def _key_result(self, job_id: str) -> str:
-        """Кэш итогового результата: async-jobs:<job_id>"""
-        return f"async-jobs:{job_id}"
+        """Кэш итогового результата: transcriber:async:<job_id>:result"""
+        return f"transcriber:async:{job_id}:result"
 
     def _key_mapping(self, job_id: str, file_hash: str) -> str:
-        """Маппинг файл → task_id: async-jobs:<job_id>:file_map:<hash>"""
-        return f"async-jobs:{job_id}:file_map:{file_hash}"
+        """Маппинг файл → task_id: transcriber:async:<job_id>:file_map:<hash>"""
+        return f"transcriber:async:{job_id}:file_map:{file_hash}"
 
     # ───────── Вспомогательные методы ─────────
     def _file_hash(self, audio_bytes: bytes) -> str:

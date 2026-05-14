@@ -56,7 +56,7 @@ func GetJob(apiCtx *gateway.Context) gin.HandlerFunc {
 		redis := apiCtx.Redis
 
 		jobID := c.Param("job_id")
-		cacheRedisKey := "sync-job" + ":" + jobID + "_cache"
+		cacheRedisKey := fmt.Sprintf("transcriber:async:%s:result_cache", jobID)
 		needDownload := c.Query("download") == "true"
 		err := validateJobId(jobID)
 

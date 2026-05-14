@@ -278,7 +278,7 @@ func (agi *GatewayInstance) HandleSyncStatusFinish() natslib.MsgHandler {
 
 		// Проверяем не подхватила ли другая реплика задание на финиш
 		redisClient := agi.redis
-		lockKey := fmt.Sprintf("transcriber.sync.%s.status.finished", data.JobId)
+		lockKey := fmt.Sprintf("transcriber:sync:%s:status_lock", data.JobId)
 		ctx := context.Background()
 		locker := redislock.New(redisClient)
 		lock, err := locker.Obtain(ctx, lockKey, 5*time.Second, nil)

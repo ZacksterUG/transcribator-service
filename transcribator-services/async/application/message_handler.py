@@ -108,7 +108,7 @@ class MessageHandler:
             return
 
         # --- 3. Проверка на уже обработанный джоб ---
-        lock_key = f"async-jobs:{job_id}"
+        lock_key = f"transcriber:async:{job_id}:job_lock"
 
         if self.dict_db.get(lock_key) == "done":
             self.logger.info(f"✅ Job {job_id} already processed (status=done), skipping")

@@ -57,7 +57,7 @@ class App:
                 if self.current_active_streams >= self.config.max_active_streams:
                     raise MaximumPoolReached('maximum pool reached')
 
-            lock = self.redis_db.lock(f'transcriber.sync.{job_id}', blocking=False, timeout=10)
+            lock = self.redis_db.lock(f'transcriber:sync:{job_id}:job_lock', blocking=False, timeout=10)
 
             if not lock.acquire(blocking=False):
                 self.logger.info(f'acquired lock for job {job_id} failed, passing')

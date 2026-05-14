@@ -111,6 +111,9 @@ func (kc *KeycloakClient) ValidateToken(tokenString string) (*TokenClaims, error
 	if iss, ok := (*claimsMap)["iss"].(string); ok {
 		claims.Issuer = iss
 	}
+	if jti, ok := (*claimsMap)["jti"].(string); ok {
+		claims.ID = jti
+	}
 	if email, ok := (*claimsMap)["email"].(string); ok {
 		claims.Email = email
 	}

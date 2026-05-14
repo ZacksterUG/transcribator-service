@@ -8,4 +8,16 @@
     <changeSet id="001" author="transcriber">
         <sqlFile path="tables/01_webhook_configs.sql" relativeToChangelogFile="true"/>
     </changeSet>
+
+    <changeSet id="002" author="transcriber">
+        <sqlFile path="tables/02_access_logs_add_username.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+
+    <changeSet id="003" author="transcriber">
+        <sqlFile path="tables/03_webhook_configs_drop_fk.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+
+    <changeSet id="004" author="transcriber">
+        <sqlFile path="tables/04_drop_streaming_times.sql" relativeToChangelogFile="true"/>
+    </changeSet>
 </databaseChangeLog>
