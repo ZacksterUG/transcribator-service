@@ -1,5 +1,5 @@
 import { Group, Button, Container, Box, Title, Avatar, Menu, NavLink } from '@mantine/core';
-import { IconUser, IconLogout, IconSettings, IconFileMusic, IconMicrophone } from '@tabler/icons-react';
+import { IconUser, IconLogout, IconFileMusic, IconMicrophone } from '@tabler/icons-react';
 import { useUser } from '../hooks/useUser';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -58,9 +58,6 @@ export function Header() {
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>Аккаунт</Menu.Label>
-                <Menu.Item leftSection={<IconSettings size={14} />}>
-                  Настройки
-                </Menu.Item>
                 <Menu.Divider />
                 <Menu.Item 
                   leftSection={<IconLogout size={14} />} 

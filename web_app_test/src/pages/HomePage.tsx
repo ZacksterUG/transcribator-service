@@ -1,4 +1,4 @@
-import { Container, Title, Text, Stack, Group, Badge, Box, Button, Grid, Card, ThemeIcon, List, Code, Table } from '@mantine/core';
+import { Container, Title, Text, Stack, Group, Badge, Box, Grid, Card, ThemeIcon, List, Code, Table } from '@mantine/core';
 import { 
   IconMicrophone, IconFileMusic, IconCloud, IconApiApp, 
   IconServer, IconDatabase, IconKey, IconStack2, IconDeviceDesktop, 
@@ -107,8 +107,9 @@ export function HomePage() {
             <Stack gap="lg">
               <Title order={2} ta="center">API Endpoints</Title>
               <Text c="dimmed" ta="center">
-                Все endpoints требуют авторизацию через JWT токен. Токен получается через Keycloak 
-                и должен передаваться в заголовке <Code>Authorization: Bearer &lt;token&gt;</Code>
+                Эндпоинты требуют JWT токен (получается через Keycloak) в заголовке
+                <Code>Authorization: Bearer &lt;token&gt;</Code>.
+                Роль <Code>transcriber</Code> необходима для всех рабочих эндпоинтов.
               </Text>
               
               <Table striped highlightOnHover>
@@ -117,69 +118,45 @@ export function HomePage() {
                     <Table.Th>Метод</Table.Th>
                     <Table.Th>Путь</Table.Th>
                     <Table.Th>Описание</Table.Th>
-                    <Table.Th>Роль</Table.Th>
+                    <Table.Th>Аутентификация</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   <Table.Tr>
                     <Table.Td><Code color="blue">POST</Code></Table.Td>
                     <Table.Td><Code>/api/async/job</Code></Table.Td>
-                    <Table.Td>Создание задачи транскрибации</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
+                    <Table.Td>Создание задачи асинхронной транскрибации</Table.Td>
+                    <Table.Td>Auth + transcriber</Table.Td>
                   </Table.Tr>
                   <Table.Tr>
                     <Table.Td><Code color="blue">GET</Code></Table.Td>
                     <Table.Td><Code>/api/async/job/:job_id</Code></Table.Td>
-                    <Table.Td>Получение статуса задачи</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
+                    <Table.Td>Статус/результат задачи (query <Code>?download=true</Code> для скачивания)</Table.Td>
+                    <Table.Td>Auth + transcriber</Table.Td>
                   </Table.Tr>
                   <Table.Tr>
-                    <Table.Td><Code color="blue">GET</Code></Table.Td>
-                    <Table.Td><Code>/api/async/job/:job_id/result</Code></Table.Td>
-                    <Table.Td>Получение результата транскрибации</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
+                    <Table.Td><Code color="green">WS</Code></Table.Td>
+                    <Table.Td><Code>GET /api/sync/job</Code></Table.Td>
+                    <Table.Td>WebSocket потоковая транскрибация в реальном времени</Table.Td>
+                    <Table.Td>Auth + transcriber</Table.Td>
                   </Table.Tr>
                   <Table.Tr>
-                    <Table.Td><Code color="blue">GET</Code></Table.Td>
-                    <Table.Td><Code>/api/async/jobs</Code></Table.Td>
-                    <Table.Td>Список задач пользователя</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
+                    <Table.Td><Code color="blue" c="gray">GET</Code></Table.Td>
+                    <Table.Td><Code>/api/heartbeat</Code></Table.Td>
+                    <Table.Td>Health check сервиса</Table.Td>
+                    <Table.Td>Не требуется</Table.Td>
                   </Table.Tr>
                   <Table.Tr>
-                    <Table.Td><Code color="blue">POST</Code></Table.Td>
-                    <Table.Td><Code>/api/sync/session</Code></Table.Td>
-                    <Table.Td>Создание сессии потоковой транскрибации</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
+                    <Table.Td><Code color="blue" c="gray">GET</Code></Table.Td>
+                    <Table.Td><Code>/api/auth-test/check</Code></Table.Td>
+                    <Table.Td>Отладка: тип авторизации</Table.Td>
+                    <Table.Td>Не требуется</Table.Td>
                   </Table.Tr>
                   <Table.Tr>
-                    <Table.Td><Code color="blue">GET</Code></Table.Td>
-                    <Table.Td><Code>/api/sync/session/:session_id/status</Code></Table.Td>
-                    <Table.Td>Получение статуса сессии</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
-                  </Table.Tr>
-                  <Table.Tr>
-                    <Table.Td><Code color="blue">GET</Code></Table.Td>
-                    <Table.Td><Code>/api/sync/sessions</Code></Table.Td>
-                    <Table.Td>Список активных сессий</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
-                  </Table.Tr>
-                  <Table.Tr>
-                    <Table.Td><Code color="blue">POST</Code></Table.Td>
-                    <Table.Td><Code>/api/webhooks</Code></Table.Td>
-                    <Table.Td>Регистрация webhook URL</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
-                  </Table.Tr>
-                  <Table.Tr>
-                    <Table.Td><Code color="blue">GET</Code></Table.Td>
-                    <Table.Td><Code>/api/webhooks</Code></Table.Td>
-                    <Table.Td>Список зарегистрированных webhook</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
-                  </Table.Tr>
-                  <Table.Tr>
-                    <Table.Td><Code color="blue">DELETE</Code></Table.Td>
-                    <Table.Td><Code>/api/webhooks/:id</Code></Table.Td>
-                    <Table.Td>Удаление webhook</Table.Td>
-                    <Table.Td>transcriber</Table.Td>
+                    <Table.Td><Code color="blue" c="gray">GET</Code></Table.Td>
+                    <Table.Td><Code>/api/auth-test/need-auth</Code></Table.Td>
+                    <Table.Td>Отладка: ID текущего пользователя</Table.Td>
+                    <Table.Td>Auth</Table.Td>
                   </Table.Tr>
                 </Table.Tbody>
               </Table>
@@ -567,98 +544,117 @@ export function HomePage() {
           {/* Redis Details */}
           <Card padding="xl" radius="md" withBorder>
             <Stack gap="lg">
-              <Title order={2} ta="center">Redis - кэширование и блокировки</Title>
+              <Title order={2} ta="center">Redis - кэширование, блокировки и идемпотентность</Title>
               <Text c="dimmed" ta="center">
-                Redis используется для распределённых блокировок, кэширования результатов и 
-                хранения состояния задач.
+                Redis используется тремя сервисами: Async Service (БД 0), Sync Service (БД 1) и API Gateway (БД 1).
+                Нейминг ключей приведён к единому формату <Code>{"transcriber:{service}:{id}:{suffix}"}</Code>.
               </Text>
               
               <Grid gap="xl">
                 <Grid.Col span={{ base: 12, md: 6 }}>
                   <Stack gap="md">
-                    <Text fw={600} size="lg" c="blue">Async Service</Text>
-                    
+                    <Text fw={600} size="lg" c="blue">Async Service (Python)</Text>
+
                     <Box>
-                      <Text size="sm" fw={500} mb="xs">🔒 Distributed Locks (идемпотентность)</Text>
-                      <Code block>{"async-jobs:{job_id}"}</Code>
+                      <Text size="sm" fw={500} mb="xs">🔒 Блокировка задачи + done-маркер</Text>
+                      <Code block>{"transcriber:async:{job_id}:job_lock"}</Code>
                       <Text size="xs" c="dimmed">
-                        Блокировка задачи для предотвращения повторной обработки. 
-                        TTL: 60 сек с автоматическим продлением.
+                        Read-write блокировка через Lua-скрипты. Предотвращает повторную
+                        обработку одного job_id. После успеха значение меняется на "done" (TTL: 1ч).
+                        TTL блокировки: 15 сек с автопродлением каждые 5 сек.
                       </Text>
                     </Box>
-                    
+
                     <Box>
-                      <Text size="sm" fw={500} mb="xs">📄 Маппинг файлов</Text>
-                      <Code block>{"async-jobs:{job_id}:file_map:{file_hash}"}</Code>
+                      <Text size="sm" fw={500} mb="xs">📄 Маппинг файла → task_id</Text>
+                      <Code block>{"transcriber:async:{job_id}:file_map:{sha256[:16]}"}</Code>
                       <Text size="xs" c="dimmed">
-                        Хранение соответствия файла task_id в Croc API. 
-                        TTL: 600 сек.
+                        Соответствие хеша файла (первые 16 символов SHA256) task_id в Croc API.
+                        Исключает повторную отправку одного и того же файла. TTL: 600 сек.
                       </Text>
                     </Box>
-                    
+
                     <Box>
-                      <Text size="sm" fw={500} mb="xs">📋 Task IDs</Text>
-                      <Code block>{"async-jobs:{job_id}:api_tasks"}</Code>
+                      <Text size="sm" fw={500} mb="xs">📋 Список task_id задачи</Text>
+                      <Code block>{"transcriber:async:{job_id}:tasks"}</Code>
                       <Text size="xs" c="dimmed">
-                        SET со всеми task_id для job_id. Позволяет отслеживать 
-                        и восстанавливать задачи после сбоев. TTL: 600 сек.
+                        JSON-массив всех task_id, отправленных в Croc API для данного job_id.
+                        Позволяет восстановить состояние после сбоя. TTL: 600 сек.
                       </Text>
                     </Box>
-                    
+
                     <Box>
-                      <Text size="sm" fw={500} mb="xs">💾 Кэш результатов</Text>
-                      <Code block>{"async-jobs:{job_id}"}</Code>
+                      <Text size="sm" fw={500} mb="xs">💾 Кэш результата</Text>
+                      <Code block>{"transcriber:async:{job_id}:result"}</Code>
                       <Text size="xs" c="dimmed">
-                        Кэширование готового результата транскрибации. 
-                        TTL: 7200 сек (2 часа).
+                        Сериализованные сегменты транскрибации. Позволяет не опрашивать
+                        Croc API повторно. TTL: 7200 сек (2 часа).
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text size="sm" fw={500} mb="xs">📚 Инфраструктура read-write lock</Text>
+                      <Code block>{"{key}:readers / {key}:write"}</Code>
+                      <Text size="xs" c="dimmed">
+                        Счётчик активных читателей (INCR/DECR через Lua) и маркер эксклюзивной
+                        записи. Используется для всех RwLock-ключей сервиса.
                       </Text>
                     </Box>
                   </Stack>
                 </Grid.Col>
-                
+
                 <Grid.Col span={{ base: 12, md: 6 }}>
                   <Stack gap="md">
-                    <Text fw={600} size="lg" c="green">Sync Service</Text>
-                    
+                    <Text fw={600} size="lg" c="green">Sync Service (Python)</Text>
+
                     <Box>
                       <Text size="sm" fw={500} mb="xs">🔒 Блокировка сессии</Text>
-                      <Code block>{"transcriber.sync.{job_id}"}</Code>
+                      <Code block>{"transcriber:sync:{job_id}:job_lock"}</Code>
                       <Text size="xs" c="dimmed">
-                        Distributed lock для активной сессии потоковой транскрибации.
-                        Non-blocking mode, timeout: 10 сек.
+                        Distributed lock через redis-py. Гарантирует, что только одна
+                        реплика sync-сервиса обрабатывает данный job_id.
+                        timeout: 10 сек, автопродление каждые 5 сек.
                       </Text>
                     </Box>
-                    
+
+                    <Box mt="lg">
+                      <Text fw={600} size="lg" c="orange">API Gateway (Go)</Text>
+                    </Box>
+
                     <Box>
-                      <Text size="sm" fw={500} mb="xs">👥 Reader Counters</Text>
-                      <Code block>{"{key}:read"}</Code>
+                      <Text size="sm" fw={500} mb="xs">⚡ Блокировка финального статуса</Text>
+                      <Code block>{"transcriber:sync:{job_id}:status_lock"}</Code>
                       <Text size="xs" c="dimmed">
-                        Счётчики активных читателей для реализации read-write lock.
-                        Используется Lua-скрипт для атомарных операций.
+                        Короткоживущий lock (5 сек) на обработку NATS-сообщения
+                        со статусом "finished". Предотвращает дублирующие обновления
+                        при перезапуске реплик gateway.
                       </Text>
                     </Box>
-                    
+
                     <Box>
-                      <Text size="sm" fw={500} mb="xs">🔐 Write Locks</Text>
-                      <Code block>{"{key}:write"}</Code>
+                      <Text size="sm" fw={500} mb="xs">💾 Кэш результата из MinIO</Text>
+                      <Code block>{"transcriber:async:{job_id}:result_cache"}</Code>
                       <Text size="xs" c="dimmed">
-                        Блокировка записи с проверкой активных читателей.
-                        Предотвращает конфликты при параллельных сессиях.
+                        Кэширование байт результата транскрибации, полученных из MinIO.
+                        Избегает повторных GET-запросов к S3 при частых обращениях
+                        к одному job_id. TTL: 24 часа.
                       </Text>
                     </Box>
                   </Stack>
                 </Grid.Col>
               </Grid>
-              
+
               <Box>
                 <Text fw={600} mb="xs">Пример workflow async с Redis:</Text>
                 <Box p="md" bg="var(--mantine-color-dark-6)" style={{ borderRadius: 8 }}>
                   <Stack gap={4}>
-                    <Text size="sm">1. POST <Code>transcriber.async.request</Code> → Gateway</Text>
-                    <Text size="sm">2. Async Service: <Code>{"SETNX async-jobs:{job_id}"}</Code> ( acquire lock)</Text>
-                    <Text size="sm">3. Обработка аудио, сохранение в <Code>{"async-jobs:{job_id}:file_map:*"}</Code></Text>
-                    <Text size="sm">4. Результат: <Code>{"SET async-jobs:{job_id} ... EX 7200"}</Code></Text>
-                    <Text size="sm">5. ACK в NATS → <Code>{"DEL async-jobs:{job_id}"}</Code> (release lock)</Text>
+                    <Text size="sm">1. POST /api/async/job → API Gateway → NATS <Code>transcriber.async.request</Code></Text>
+                    <Text size="sm">2. Async Service: <Code>{"GET transcriber:async:{job_id}:job_lock"}</Code> → "done"? → пропуск</Text>
+                    <Text size="sm">3. <Code>{"RWLOCK transcriber:async:{job_id}:job_lock"}</Code> (ttl=15) — захват блокировки</Text>
+                    <Text size="sm">4. Отправка файлов в Croc API, запись <Code>{"transcriber:async:{job_id}:file_map:{hash}"}</Code></Text>
+                    <Text size="sm">5. Сохранение результата <Code>{"SET transcriber:async:{job_id}:result ... EX 7200"}</Code></Text>
+                    <Text size="sm">6. <Code>{"SET transcriber:async:{job_id}:job_lock done EX 3600"}</Code> — done-маркер</Text>
+                    <Text size="sm">7. NATS ACK, Auto-Release блокировки</Text>
                   </Stack>
                 </Box>
               </Box>
@@ -709,19 +705,6 @@ export function HomePage() {
                 </Grid.Col>
               </Grid>
             </Stack>
-          </Card>
-
-          {/* Getting Started */}
-          <Card padding="lg" radius="md" withBorder bg="var(--mantine-color-dark-6)">
-            <Group justify="space-between" wrap="nowrap">
-              <Box>
-                <Text fw={600} size="lg">Готовы начать?</Text>
-                <Text size="sm" c="dimmed">
-                  Войдите в систему для получения доступа к API и документации
-                </Text>
-              </Box>
-              <Button size="md">Документация API</Button>
-            </Group>
           </Card>
         </Stack>
       </Container>
