@@ -302,6 +302,20 @@ services:
     networks:
       - frontend-network
 
+  mobile-app:
+    build:
+      context: ./mobile-app
+      dockerfile: Dockerfile
+      args:
+        VITE_WS_URL: ${VITE_WS_URL_MOBILE}
+    container_name: mobile-app
+    ports:
+      - "86:80"
+    depends_on:
+      - web-app-backend
+    networks:
+      - frontend-network
+
 networks:
   transcription-net:
     driver: bridge
