@@ -55,7 +55,8 @@ class App:
 
             async with self.pool_lock:
                 if self.current_active_streams >= self.config.max_active_streams:
-                    raise MaximumPoolReached('maximum pool reached')
+                    self.logger.info('maximum pool reached')
+                    return 
 
             lock = self.redis_db.lock(f'transcriber:sync:{job_id}:job_lock', blocking=False, timeout=10)
 

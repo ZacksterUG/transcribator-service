@@ -1,25 +1,4 @@
 services:
-
-  nginx-proxy:
-    build:
-      context: ./nginx-proxy
-      dockerfile: Dockerfile
-    container_name: nginx-proxy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx-proxy/data:/etc/letsencrypt
-      - ./nginx-proxy/www:/var/www/certbot
-    networks:
-      - frontend-network
-      - transcription-net
-      - tg-network
-    depends_on:
-      - web-app-frontend
-      - web-app-backend
-      - api-gateway
-      - keycloak
   minio:
     image: minio/minio:latest
     container_name: minio-storage
@@ -183,7 +162,6 @@ services:
     build:
       context: ./api_gateway
       dockerfile: Dockerfile
-    ports: ["10000-10004:10000"]
     depends_on:
       - db
       - nats
@@ -288,10 +266,11 @@ services:
       - "3002:3002"
       - "30011:30011"
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS}
       PORT: 3001
       API_GATEWAY_URL: ${API_GATEWAY_URL}
-      KEYCLOAK_URL: ${VITE_KEYCLOAK_URL}
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       KEYCLOAK_CLIENT_ID: ${WEB_APP_KEYCLOAK_CLIENT_ID}
       KEYCLOAK_CLIENT_SECRET: ${WEB_APP_KEYCLOAK_CLIENT_SECRET}

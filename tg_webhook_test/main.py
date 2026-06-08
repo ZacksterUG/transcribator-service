@@ -40,21 +40,29 @@ if not bot_token:
 bot_app: Application = None  # type: ignore
 bot_loop = None
 
+# Прокси для Telegram (опционально)
+TG_PROXY_URL = os.getenv("TG_PROXY_URL")
+TG_PROXY_TIMEOUT = int(os.getenv("TG_PROXY_TIMEOUT", "30"))
+
 
 def run_bot():
     global bot_app, bot_loop
 
-    request_config = HTTPXRequest(
-        connect_timeout=10,
-        read_timeout=30,
-        write_timeout=30,
-        pool_timeout=20,
-    )
+    request_kwargs = {
+        "connect_timeout": 10,
+        "read_timeout": 30,
+        "write_timeout": 30,
+        "pool_timeout": 20,
+    }
+    if TG_PROXY_URL is not None:
+        request_kwargs["proxy_url"] = TG_PROXY_URL
+        logger.info(f"Using proxy for Telegram: {TG_PROXY_URL}")
 
     bot_app = Application.builder() \
         .token(bot_token) \
-        .request(request_config) \
+        .request(HTTPXRequest(**request_kwargs)) \
         .build()
+
 
     bot_app.add_handler(CommandHandler("start", start_command))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

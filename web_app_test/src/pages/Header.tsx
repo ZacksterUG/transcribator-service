@@ -39,7 +39,7 @@ export function Header() {
                 <NavLink
                   component={Link}
                   to="/sync"
-                  label="Потоковая"
+                  label="Синхронная"
                   leftSection={<IconMicrophone size={16} />}
                   variant="light"
                 />

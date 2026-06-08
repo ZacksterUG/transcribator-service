@@ -16,7 +16,7 @@ export function HomePage() {
             </Title>
             <Text size="xl" c="dimmed" maw={800} mx="auto">
               Распределённая микросервисная архитектура для распознавания речи с поддержкой 
-              асинхронной пакетной обработки и синхронной потоковой транскрибации в реальном времени
+              асинхронной обработки и синхронной транскрибации в реальном времени
             </Text>
           </Stack>
 
@@ -74,7 +74,7 @@ export function HomePage() {
                         <IconMicrophone size={24} />
                       </ThemeIcon>
                       <Box>
-                        <Text fw={600} size="lg">Потоковая обработка</Text>
+                        <Text fw={600} size="lg">Синхронная обработка</Text>
                         <Text size="sm" c="dimmed">transcribator-sync</Text>
                       </Box>
                     </Group>
@@ -137,7 +137,7 @@ export function HomePage() {
                   <Table.Tr>
                     <Table.Td><Code color="green">WS</Code></Table.Td>
                     <Table.Td><Code>GET /api/sync/job</Code></Table.Td>
-                    <Table.Td>WebSocket потоковая транскрибация в реальном времени</Table.Td>
+                    <Table.Td>WebSocket синхронная транскрибация в реальном времени</Table.Td>
                     <Table.Td>Auth + transcriber</Table.Td>
                   </Table.Tr>
                   <Table.Tr>
@@ -229,7 +229,7 @@ export function HomePage() {
                         <Text fw={600}>Sync Service</Text>
                       </Group>
                       <Text size="sm" c="dimmed">
-                        Синхронный сервис потоковой обработки. Реализован на Python.
+                        Синхронный сервис синхронной обработки. Реализован на Python.
                       </Text>
                       <List spacing={4} size="xs">
                         <List.Item>sherpa-onnx модели</List.Item>
@@ -237,7 +237,7 @@ export function HomePage() {
                         <List.Item>Endpoint detection</List.Item>
                         <List.Item>Redis distributed locks</List.Item>
                         <List.Item>NATS pub/sub</List.Item>
-                        <List.Item>Потоковая обработка</List.Item>
+                        <List.Item>Синхронная обработка</List.Item>
                       </List>
                     </Stack>
                   </Card>

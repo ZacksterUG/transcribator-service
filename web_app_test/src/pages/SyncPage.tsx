@@ -197,8 +197,8 @@ export function SyncPage() {
             <IconMicrophone size={24} />
           </ThemeIcon>
           <Box>
-            <Title order={2}>Потоковая обработка</Title>
-            <Text c="dimmed">Real-time транскрибация аудиопотока</Text>
+            <Title order={2}>Синхронная обработка</Title>
+            <Text c="dimmed">Транскрибация в реальном времени</Text>
           </Box>
         </Group>
 
@@ -249,12 +249,12 @@ export function SyncPage() {
               </Group>
             )}
 
-            {isReady && (
+            {(isReady || finalSegments.length > 0) && (
               <Box>
                 <Text fw={500} mb="xs">Транскрипция:</Text>
                 <Stack gap="xs">
                   {finalSegments.map((segment, i) => (
-                    <Card key={i} padding="sm" withBorder bg="gray.0">
+                    <Card key={i} padding="sm" withBorder>
                       <Text>{segment}</Text>
                     </Card>
                   ))}

@@ -11,8 +11,11 @@ import { WebSocketServer, WebSocket } from 'ws';
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : ['http://localhost:5173', 'http://localhost:5174'];
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: corsOrigins,
   credentials: true,
 }));
 app.use(express.json());
